@@ -1,0 +1,25 @@
+```{julia}
+using MissingLinks
+import GeoFormatTypes as GFT
+import TOML
+
+config = TOML.parsefile(joinpath(@__DIR__, ".Renviron"))
+DATA_PATH = config["DATA_PATH"]
+```
+
+```{julia}
+G = MissingLinks.graph_from_osm(
+    joinpath(DATA_PATH, "data", "triangle.osm.pbf"),
+    MissingLinks.TraversalPermissionSettings(),
+    GFT.EPSG(32119) # State Plane NC, meters
+)
+```
+
+```{julia}
+(nv(G), ne(G))
+```
+
+```{julia}
+graph_to_gis(joinpath(DATA_PATH, "data", "graph.gpkg"))
+```
+
