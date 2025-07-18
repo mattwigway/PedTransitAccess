@@ -2,7 +2,7 @@
 
 julia_version = "1.11.6"
 manifest_format = "2.0"
-project_hash = "61590ab075aa312ff7bfa287f0698f9ebeedb46f"
+project_hash = "d6f47dc1f56fcee135946dbc0c74986dd884108f"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -196,6 +196,11 @@ version = "0.10.8"
     SentinelArrays = "91c51154-3ec4-41a3-a24f-3f23e20d615c"
     StructTypes = "856f2bd8-1eba-4b0a-8007-ebc267875bd4"
 
+[[deps.Chain]]
+git-tree-sha1 = "9ae9be75ad8ad9d26395bf625dea9beac6d519f1"
+uuid = "8be319e6-bccf-4806-a6f7-6fae938471bc"
+version = "0.6.0"
+
 [[deps.ChainRulesCore]]
 deps = ["Compat", "LinearAlgebra"]
 git-tree-sha1 = "06ee8d1aa558d2833aa799f6f0b31b30cada405f"
@@ -284,6 +289,12 @@ git-tree-sha1 = "439e35b0b36e2e5881738abc8857bd92ad6ff9a8"
 uuid = "d38c429a-6771-53c6-b99e-75d170b6e991"
 version = "0.6.3"
 
+[[deps.CoordinateTransformations]]
+deps = ["LinearAlgebra", "StaticArrays"]
+git-tree-sha1 = "a692f5e257d332de1e554e4566a4e5a8a72de2b2"
+uuid = "150eb455-5306-5404-9cee-2592286d6298"
+version = "0.6.4"
+
 [[deps.CoupledFields]]
 deps = ["LazyGrids", "LinearAlgebra", "Statistics", "StatsBase"]
 git-tree-sha1 = "e2f5caf2e315453d24f0c731eb9e17fa5e81589d"
@@ -305,6 +316,12 @@ deps = ["Compat", "DataAPI", "DataStructures", "Future", "InlineStrings", "Inver
 git-tree-sha1 = "fb61b4812c49343d7ef0b533ba982c46021938a6"
 uuid = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 version = "1.7.0"
+
+[[deps.DataFramesMeta]]
+deps = ["Chain", "DataFrames", "MacroTools", "OrderedCollections", "Reexport", "TableMetadataTools"]
+git-tree-sha1 = "21a4335f249f8b5f311d00d5e62938b50ccace4e"
+uuid = "1313f7d8-7da2-5740-9ea0-a2ca25f37964"
+version = "0.15.4"
 
 [[deps.DataStructures]]
 deps = ["Compat", "InteractiveUtils", "OrderedCollections"]
@@ -507,6 +524,12 @@ git-tree-sha1 = "a84e58e9884a95399364fa8ae36d3eb9925b746f"
 uuid = "d604d12d-fa86-5845-992e-78dc15976526"
 version = "3.13.1+1"
 
+[[deps.GTFS]]
+deps = ["ArgParse", "CSV", "Compat", "DataFrames", "DataFramesMeta", "DataStructures", "Dates", "Geodesy", "Missings", "ProtoBuf", "ShiftedArrays", "ZipFile"]
+path = "/Users/mwbc/.julia/dev/GTFS"
+uuid = "55d01638-f41f-4520-a957-9ff9a0ad12ca"
+version = "1.0.0-DEV"
+
 [[deps.Gadfly]]
 deps = ["Base64", "CategoricalArrays", "Colors", "Compose", "Contour", "CoupledFields", "DataAPI", "DataStructures", "Dates", "Distributions", "DocStringExtensions", "Hexagons", "IndirectArrays", "IterTools", "JSON", "KernelDensity", "LinearAlgebra", "Loess", "Measures", "Printf", "REPL", "Random", "Requires", "Showoff", "Statistics"]
 git-tree-sha1 = "ab56d1feb312d7202015905e43ebd1ae77cb393f"
@@ -541,6 +564,12 @@ deps = ["GeoInterface", "RecipesBase"]
 git-tree-sha1 = "fb1156076f24f1dfee45b3feadb31d05730a49ac"
 uuid = "0329782f-3d07-4b52-b9f6-d3137cf03c7a"
 version = "1.0.2"
+
+[[deps.Geodesy]]
+deps = ["CoordinateTransformations", "Dates", "LinearAlgebra", "StaticArrays"]
+git-tree-sha1 = "ed98a4429bf0a033ccc5e036120181dd52f06d31"
+uuid = "0ef565a4-170c-5f04-8de2-149903a85f3d"
+version = "1.1.0"
 
 [[deps.GeometryBasics]]
 deps = ["EarCut_jll", "Extents", "IterTools", "LinearAlgebra", "PrecompileTools", "Random", "StaticArrays"]
@@ -1043,7 +1072,7 @@ uuid = "9237b28f-5490-5468-be7b-bb81f5f5e6cf"
 version = "10.1.4+3"
 
 [[deps.MissingLinks]]
-deps = ["ArchGDAL", "ArgParse", "Artifacts", "CSV", "Cairo", "Compat", "DataFrames", "DataStructures", "Dates", "EzXML", "Fontconfig", "GDAL", "Gadfly", "GeoDataFrames", "GeoFormatTypes", "GeoInterface", "Graphs", "Humanize", "LibGEOS", "LibSpatialIndex", "LinearAlgebra", "Logging", "MetaGraphsNext", "Mmap", "OpenStreetMapPBF", "StatsBase", "ThreadsX"]
+deps = ["ArchGDAL", "ArgParse", "Artifacts", "CSV", "Cairo", "Compat", "DataFrames", "DataStructures", "Dates", "EzXML", "Fontconfig", "GDAL", "Gadfly", "GeoDataFrames", "GeoFormatTypes", "GeoInterface", "Graphs", "Humanize", "LibGEOS", "LibSpatialIndex", "LinearAlgebra", "Logging", "MetaGraphsNext", "Mmap", "OpenStreetMapPBF", "ProgressMeter", "StatsBase", "ThreadsX"]
 path = "/Users/mwbc/.julia/dev/MissingLinks"
 uuid = "472ee5c9-fceb-493a-8c64-09683b8345c2"
 version = "0.1.0"
@@ -1222,6 +1251,12 @@ deps = ["Unicode"]
 uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 version = "1.11.0"
 
+[[deps.ProgressMeter]]
+deps = ["Distributed", "Printf"]
+git-tree-sha1 = "13c5103482a8ed1536a54c08d0e742ae3dca2d42"
+uuid = "92933f4c-e287-5a05-a399-4b506db050ca"
+version = "1.10.4"
+
 [[deps.ProtoBuf]]
 deps = ["BufferedStreams", "Dates", "EnumX", "TOML"]
 git-tree-sha1 = "fc4db306152dbc89035d5c6d9319a69cf5d4f4b9"
@@ -1342,6 +1377,11 @@ version = "1.1.2"
 deps = ["Distributed", "Mmap", "Random", "Serialization"]
 uuid = "1a1011a3-84de-559e-8e89-a11a2f7dc383"
 version = "1.11.0"
+
+[[deps.ShiftedArrays]]
+git-tree-sha1 = "503688b59397b3307443af35cd953a13e8005c16"
+uuid = "1277b4bf-5013-50f5-be3d-901d8477a67a"
+version = "2.0.0"
 
 [[deps.Showoff]]
 deps = ["Dates", "Grisu"]
@@ -1465,6 +1505,12 @@ deps = ["Dates"]
 uuid = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 version = "1.0.3"
 
+[[deps.TableMetadataTools]]
+deps = ["DataAPI", "Dates", "TOML", "Tables", "Unitful"]
+git-tree-sha1 = "c0405d3f8189bb9a9755e429c6ea2138fca7e31f"
+uuid = "9ce81f87-eacc-4366-bf80-b621a3098ee2"
+version = "0.1.0"
+
 [[deps.TableTraits]]
 deps = ["IteratorInterfaceExtensions"]
 git-tree-sha1 = "c06b2f539df1c6efa794486abfb6ed2022561a39"
@@ -1546,6 +1592,24 @@ version = "1.11.0"
 uuid = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
 version = "1.11.0"
 
+[[deps.Unitful]]
+deps = ["Dates", "LinearAlgebra", "Random"]
+git-tree-sha1 = "d2282232f8a4d71f79e85dc4dd45e5b12a6297fb"
+uuid = "1986cc42-f94f-5a68-af5c-568840ba703d"
+version = "1.23.1"
+
+    [deps.Unitful.extensions]
+    ConstructionBaseUnitfulExt = "ConstructionBase"
+    ForwardDiffExt = "ForwardDiff"
+    InverseFunctionsUnitfulExt = "InverseFunctions"
+    PrintfExt = "Printf"
+
+    [deps.Unitful.weakdeps]
+    ConstructionBase = "187b0558-2788-49d3-abe0-74a17ed4e7c9"
+    ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
+    InverseFunctions = "3587e190-3f89-42d0-90ee-14403ec27112"
+    Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+
 [[deps.WeakRefStrings]]
 deps = ["DataAPI", "InlineStrings", "Parsers"]
 git-tree-sha1 = "b1be2855ed9ed8eac54e5caff2afcdb442d52c23"
@@ -1616,6 +1680,12 @@ deps = ["Artifacts", "JLLWrappers", "Libdl"]
 git-tree-sha1 = "a63799ff68005991f9d9491b6e95bd3478d783cb"
 uuid = "c5fb5394-a638-5e4d-96e5-b29de1b5cf10"
 version = "1.6.0+0"
+
+[[deps.ZipFile]]
+deps = ["Libdl", "Printf", "Zlib_jll"]
+git-tree-sha1 = "f492b7fe1698e623024e873244f10d89c95c340a"
+uuid = "a5390f91-8eb1-5f08-bee0-b1d1ffed6cea"
+version = "0.10.1"
 
 [[deps.Zlib_jll]]
 deps = ["Libdl"]

@@ -1,7 +1,13 @@
 ```{julia}
-using MissingLinks
+using MissingLinks, Graphs, MetaGraphsNext, Logging, Mmap
+using GTFS
 import GeoFormatTypes as GFT
 import TOML
+import ProgressMeter
+using Dates, DataFrames, DataFramesMeta, GeoDataFrames
+import ArchGDAL as AG
+import GeoFormatTypes as GFT
+import Serialization: serialize
 
 config = TOML.parsefile(joinpath(@__DIR__, ".Renviron"))
 DATA_PATH = config["DATA_PATH"]
@@ -16,10 +22,132 @@ G = MissingLinks.graph_from_osm(
 ```
 
 ```{julia}
+G = remove_tiny_islands(G, 10)
+```
+
+```{julia}
 (nv(G), ne(G))
 ```
 
 ```{julia}
-graph_to_gis(joinpath(DATA_PATH, "data", "graph.gpkg"))
+graph_to_gis(joinpath(DATA_PATH, "data", "graph_orig.gpkg"), G; crs=GFT.EPSG(32119))
 ```
 
+```{julia}
+MissingLinks.collapse_realized_graph!(G)
+```
+
+```{julia}
+(nv(G), ne(G))
+```
+
+```{julia}
+graph_to_gis(joinpath(DATA_PATH, "data", "graph.gpkg"), G; crs=GFT.EPSG(32119))
+```
+
+## Load GTFS files for the Triangle
+
+```{julia}
+cht = GTFS.read(joinpath(DATA_PATH, "data", "gtfs", "cht.zip"))
+gotriangle = GTFS.read(joinpath(DATA_PATH, "data", "gtfs", "gotriangle.zip"))
+godurham = GTFS.read(joinpath(DATA_PATH, "data", "gtfs", "godurham.zip"))
+goraleigh = GTFS.read(joinpath(DATA_PATH, "data", "gtfs", "goraleigh.zip"))
+gocary = GTFS.read(joinpath(DATA_PATH, "data", "gtfs", "gocary.zip"))
+```
+
+## Number of trips by stop
+
+This isn't perfect but it's a proxy for the value of the stop.
+
+```{julia}
+function stop_counts(feed, date)
+    @assert ismissing(feed.frequencies) || nrow(feed.frequencies) == 0
+
+    result = @chain feed.stop_times begin
+        leftjoin(feed.trips, on=:trip_id)
+        @subset(:service_id .∈ Ref(GTFS.services_active(feed, date)))
+        # we don't have frequencies asserted above
+        groupby(:stop_id)
+        @combine(:trip_count=length(:stop_id))
+        innerjoin(feed.stops, on=:stop_id)
+        @rtransform :geom=AG.createpoint([:stop_lon, :stop_lat])
+        metadata!("geometrycolumns", (:geom,))
+        metadata!("crs", GFT.EPSG(4326))
+        reproject(GFT.EPSG(32119), always_xy=true)
+        select(:stop_id, :stop_name, :trip_count, :geom)
+    end
+
+    if nrow(result) == 0
+        @warn "no served stops for $feed"
+    end
+
+    return result
+end
+```
+
+```{julia}
+all_stops = vcat(
+    stop_counts(cht, Date(2024, 10, 4)), # A Thursday when the feed is valid
+    stop_counts(gotriangle, Date(2025, 7, 17)),
+    stop_counts(godurham, Date(2025, 7, 17)),
+    stop_counts(gocary, Date(2025, 7, 17)),
+    stop_counts(goraleigh, Date(2025, 7, 17))
+)
+
+metadata!(all_stops, "geometrycolumns", (:geom,))
+metadata!(all_stops, "crs", GFT.EPSG(32119))
+```
+
+```{julia}
+stop_vertices = MissingLinks.link_points!(G, all_stops.geom, create=true)
+```
+
+## Create weights
+
+```{julia}
+weights = zeros(Int32, nv(G))
+for (vertex, count) ∈ zip(stop_vertices, all_stops.trip_count)
+    weights[code_for(G, vertex)] += count
+end
+```
+
+```{julia}
+pop = GeoDataFrames.read(joinpath(DATA_PATH, "data", "population.gpkg"))
+origin_weights = create_graph_weights(G, pop, [:P1_001N], 1e-6)[:, 1]
+sum(origin_weights) / sum(pop.P1_001N)
+```
+
+## Run algorithm
+
+```{julia}
+algorithm_start = Dates.now()
+
+@info "Building distance matrix"
+dfile = open("distances.bin", "w+")
+matrix = Mmap.mmap(dfile, Matrix{UInt16}, (nv(G), nv(G)); grow=true)
+
+fill_distance_matrix!(G, matrix; maxdist=1000)
+```
+
+```{julia}
+all_candidate_links = identify_potential_missing_links(G, matrix, 100, 500)
+```
+
+```{julia}
+candidate_links = deduplicate_links(all_candidate_links, matrix, 100)
+```
+
+```{julia}
+scores = score_links(x -> x < 1000, candidate_links, matrix, origin_weights, dest_weights, 1000)
+```
+
+```{julia}
+@info "Runtime: $(round((Dates.now() - algorithm_start), Minute))"
+```
+
+## Write output
+
+```{julia}
+serialize(joinpath(DATA_PATH, "data", "graph.jlobj"), G)
+serialize(joinpath(DATA_PATH, "data", "links_scores.jlobj"), collect(zip(candidate_links, scores)))
+```
