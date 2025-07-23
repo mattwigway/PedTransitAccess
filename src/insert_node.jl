@@ -104,24 +104,43 @@ function insert_links!(G, ways, nodes, links)
 
     way_id = STARTING_WAY_ID
     for link ∈ links
-        src_geom = MissingLinks.gdal_to_geos(G[label_for(link.fr_edge_src), label_for(G, link.fr_edge_tgt)])
+        src_geom = MissingLinks.gdal_to_geos(G[label_for(G, link.fr_edge_src), label_for(G, link.fr_edge_tgt)])
         start = geos_to_gdal(LibGEOS.interpolate(src_geom, link.fr_dist_from_start))
-        
-        # find the closest way. It is possible this will not be the right way if the link connects at an intersection,
-        # but topologically that's okay - it will just connect to the intersection which is connected to the right way.
-        start_way, start_way_dist = find_closest(idx, start, ways, nodes)
-        @assert start_way_dist .< 1e-6 # should be basically on the way
 
-        # note that we do not update the geometry in the spatial index here, but that's okay; the envelope will not change
-        # and the way is modified in place.
-        start_node = insert_node!(start_way, nodes, start)
+        if label_for(G, link.fr_edge_src).type != :island
+            # no need to check fr_edge_tgt - island nodes are always connected to other island nodes    
+            # find the closest way. It is possible this will not be the right way if the link connects at an intersection,
+            # but topologically that's okay - it will just connect to the intersection which is connected to the right way.
+            start_way, start_way_dist = find_closest(idx, start, ways, nodes)
+            @assert start_way_dist .< 1e-6 # should be basically on the way
 
-        dst_geom = MissingLinks.gdal_to_geos(G[label_for(link.to_edge_src), label_for(G, link.to_edge_tgt)])
-        endd = geos_to_gdal(LibGEOS.interpolate(dst_geom, link.to_dist_from_start))
-        end_way, end_way_dist = find_closest(idx, endd, ways, nodes)
-        @assert end_way_dist .< 1e-6 # should be basically on the way
+            # note that we do not update the geometry in the spatial index here, but that's okay; the envelope will not change
+            # and the way is modified in place.
+            start_node = insert_node!(start_way, nodes, start)
+        else
+            new_node_id = STARTING_NODE_ID
+            while haskey(nodes, new_node_id)
+                new_node_id += 1
+            end
+            nodes[new_node_id] = Node(new_node_id, AG.gety(start, 0), AG.getx(start, 0), Dict())
+            start_node = new_node_id
+        end
 
-        end_node = insert_node!(end_way, nodes, endd)
+        if label_for(G, link.to_edge_src).type != :island        
+            dst_geom = MissingLinks.gdal_to_geos(G[label_for(G, link.to_edge_src), label_for(G, link.to_edge_tgt)])
+            endd = geos_to_gdal(LibGEOS.interpolate(dst_geom, link.to_dist_from_start))
+            end_way, end_way_dist = find_closest(idx, endd, ways, nodes)
+            @assert end_way_dist .< 1e-6 # should be basically on the way
+
+            end_node = insert_node!(end_way, nodes, endd)
+        else
+            new_node_id = STARTING_NODE_ID
+            while haskey(nodes, new_node_id)
+                new_node_id += 1
+            end
+            nodes[new_node_id] = Node(new_node_id, AG.gety(endd, 0), AG.getx(endd, 0), Dict())
+            end_node = new_node_id
+        end
 
         push!(ways, Way(way_id, [start_node, end_node], Dict("highway"=>"footway")))
         way_id += 1
