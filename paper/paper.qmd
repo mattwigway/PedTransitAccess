@@ -1,0 +1,98 @@
+---
+title: Expanding transit access through street network interventions
+format:
+  trb-pdf: default
+author:
+  - name: Matthew Wigginton Bhagat-Conway
+    affiliations:
+      - name: University of North Carolina at Chapel Hill
+        department: Department of City and Regional Planning
+        address: "223 E Cameron Ave, CB #3140"
+        city: Chapel Hill
+        state: NC
+        country: USA
+        postal-code: 27599
+    orcid: 0000-0002-1210-2982
+    email: mwbc@unc.edu
+abstract: |
+  This document is a template demonstrating the TRB format.
+keywords: [last-mile, transit, pedestrian environment]
+bibliography: bibliography.bib
+date: 2025-07-18
+---
+
+# Introduction
+
+Accessibility metrics are increasingly used in transportation planning [@miller_accessibility_2018, @cotam_2020], and particularly in public transit planning [e.g., @conway_evidencebased_2017a, @conway_accounting_2018, @conway_getting_2019, @santanapalacios_unpacking_2025, @pereira_transport_2018, @herszenhut_impact_2022b, @wu_urban_2021]. These metrics measure the potential access to opportunities afforded by the transportation system—in their simplest form, this might be something like "a person at this location can reach 200,000 job opportunities within 60 minutes on public transportation."
+
+Most often, accessibility metrics are used in transit planning to evaluate the impacts of changes to transit service. However, the vast majority of transit users walk to transit [e.g., @cignarella_onboard_2023], meaning the pedestrian environment around stops is also very important to understanding transit access. Modern accessibility analysis tools model the walk to transit as well as the ride time, often using OpenStreetMap data, so the pedestrian environment is not completely discounted. However, it is rare to model transit access impacts of changes to the pedestrian network.
+
+Much post-war development in the United States is characterized by disconnected street networks, cul-de-sacs, and sparse pedestrian infrastructure. This type of street network design can significantly reduce the catchment area of bus stops. For instance, @fig-catchment shows a 20-minute walk from two bus stops in Raleigh, North Carolina, USA. The dark line indicates the theoretical maximum catchment if one could walk in a straight line in any direction. The shaded area shows the actually reachable area. On the left, a stop in downtown Raleigh is shown; since downtown has a well-connected, gridded street network, the reachable area approaches the theoretical maximum. On the right, a stop in suburban north Raleigh is shown; the reachable area is significantly smaller.
+
+![Catchment areas of two bus stops in Raleigh, North Carolina, USA](figures/catchement.png){#fig-catchment fig-pos="b" fig-alt="Maps showing reachable areas on foot around two bus stops in Raleigh, NC. On the left is a stop downtown, while on the right is a stop in the northern suburbs. A 1.2 km crow-flies buffer around each stop is shown. The area actually reachable using the pedestrian network is shaded. Downtown Raleigh has an extensive gridded pedestrian network, so the reachable area is similar in extent to the crow-flies buffer. In the suburbs, the pedestrian network is more disconnected, so the reachable area is significantly smaller than the buffer."}
+
+Bhagat-Conway, Compiano, and Ivie [-@bhagat-conway_close_2025] introduced an algorithm to identify "low-hanging fruit" missing links in the pedestrian network. Specifically, their algorithm identifies locations on the street network that are close together geographically, but far apart in network distance. It then scores those links based on their contribution to accessibility.
+
+In this article, I apply this algorithm to identify potential links that could improve access to public transit stops, and then evaluate the most-highly-ranked links using a traditional accessibility metric generally applied to transit service changes.
+
+# Literature review
+
+Considering first- and last-mile barriers in transit accessibility analyses is very important. Different methods for calculating catchment areas produce very different results, both in terms of the catchment areas identified [@macias_alternative_2016] and in terms of overall acessibility results [@vaneggermond_pedestrian_2016].
+
+# Methods and data
+
+I use data from the Research Triangle region of North Carolina, USA, to identify locations where additions to the pedestrian network could increase transit access. I source GTFS data from the five major transit operators in the region: GoDurham, GoRaleigh, GoTriangle, GoCary, and Chapel Hill Transit.
+
+I source pedestrian network data from OpenStreetMap. Sidewalk representations in OpenStreetMap vary somewhat in both quality and in how they are mapped (separately from the road vs. as a tag on the road itself) [@omar_crowdsourcing_2022]. For this reason, most OpenStreetMap-based routing engines take a fairly lenient approach in terms of pedestrian path generation: they allow walking on any road where pedestrians are assumed to be legally allowed (i.e. most roads, excepting freeways/motorways and those explicitly tagged as not allowing pedestrians).
+
+Since this work focuses on improvements to the pedestrian network, we want to use a network of links where pedestrians are likely to feel comfortable walking, rather than all places they are legally allowed to walk. To approximate this network, we filter the OpenStreetMap data to only ways that have a highway type of
+
+- footway,
+- cycleway,
+- pedestrian,
+- track,
+- sidewalk,
+- service,
+- road,
+- steps,
+- path,
+- crossing, or
+- residential,
+
+as well as those that are tagged as having sidewalks or are explicitly tagged as allowing pedestrians. This leads to a somewhat disconnected network in suburban areas. This disconnected network is a better representation of the lived experience of pedestrians in suburban areas of the Research Triangle.
+
+I then apply the algorithm of Bhagat-Conway et al. [@bhagat-conway_close_2025] to this network. This algorithm identifies locations on the network that are geographically close together, but far apart or disconnected entirely in network space, and ranks them using an accessibility metric. In this work, I identify links that are no more than 50 m long, and avoid a walk of at least 500 m.
+
+This process identifies over 500,000 potential links in the region, though many provide effectively the same access. Using the deduplication method described in @bhagat-conway_close_2025, I reduce this to XXX links. I then score these links using an accessibility metric. Tolerance for distance to transit is usually assumed to be between 400 m and 1 km; I take the upper end of this range and use the an accessibility metric based on stops accessible within 1 km. I weight this by the number of vehicles serving the stop, as well as the number of people who the new link serves. Specifically, the overall access to transit provided by the network is
+
+$$
+\displaystyle\sum_i p_i \sum_s w_s f(d_{is})
+$$ {#eq-access}
+
+where $i$ is an index of all nodes in the graph, $p_i$ is the population assigned to each node (based on the 2020 Census block-level population and the same assignment technique used in @bhagat-conway_close_2025), $w_s$ is the weight assigned to stop $s$, and $d_{is}$ is the network distance from node $i$ to stop $s$. $f(d_{is})$ is the impedance function, which in this case is simply
+
+$$
+f(d_{is}) = \begin{cases}
+  ~~1 & d_{is} < 1~\mathrm{km} \\
+  ~~0 & \mathrm{\textit{otherwise}} \\
+\end{cases}
+$$ {#eq-cutoff}
+
+The weight assigned to a stop is the number of vehicles that serve that stop on a typical weekday, so stops that are served more frequently will have a higher impact on overall accessibility. Similarly, stops that serve a larger number of people will have a greater impact on overall accessibility. I rank the identified links based on the impact each link individually has on the accessibility in @eq-access.
+
+The accessibility algorithm requires that all origins and destinations be associated with a node, so I insert all stops in each of the GTFS into the graph. If they are near an existing node, I assign the stop to that node. If they are near an existing edge but not near an existing node, I insert a node into that nearby edge. Lastly, if they are not near any edges (e.g. stops that are on streets without sidewalks), I add two nearly-coincident nodes, and a "phantom" edge between them. The algorithm only identifies missing links between edges, so this phantom edge allows the algorithm to connect these stops to the network.
+
+Links ranked highly by this algorithm have a strong impact on accessibility _to_ transit, but accessibility _using_ transit is generally more interesting—being able to get to a bus stop is not particularly useful if that bus does not take you places you want to be. I take the 50 links that are ranked most highly, and I create a modified version of the input OpenStreetMap data that includes these links. I then evaluate access to jobs within 60 minutes via transit, to understand how these links that increase access to transit also increase access using transit.
+
+I retrieve data on block-level job locations from the 2022 US Census Bureau Longitudinal Employer-Household Dynamics. I then evaluate access to jobs within 60 minutes, using the GTFS files discussed above, and the baseline and modified pedestrian networks. There are no differences in transit service between the two scenarios. I use the `r5r` package [@pereira_r5r_2021a] to perform accessibility calculations.
+
+# Results
+
+# Discussion
+
+# Future research
+
+- directed graphs would let us measure access to lines rather than stops.
+
+# References
+
