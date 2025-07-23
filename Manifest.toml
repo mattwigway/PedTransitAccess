@@ -2,7 +2,7 @@
 
 julia_version = "1.11.6"
 manifest_format = "2.0"
-project_hash = "d6f47dc1f56fcee135946dbc0c74986dd884108f"
+project_hash = "91151c9345a5a8c2ab4f5c33896b13f5ab366bc8"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -1162,8 +1162,8 @@ uuid = "efe28fd5-8261-553b-a9e1-b2916fc3738e"
 version = "0.5.6+0"
 
 [[deps.OpenStreetMapPBF]]
-deps = ["ArgParse", "CodecZlib", "Logging", "Mmap", "ProtoBuf"]
-git-tree-sha1 = "04ea1809c098ac0b7ca1dd5b9af28ff9a7830472"
+deps = ["ArgParse", "CodecZlib", "Logging", "Mmap", "ProtoBuf", "StructEquality"]
+path = "/Users/mwbc/.julia/dev/OpenStreetMapPBF"
 uuid = "32359c53-f983-4442-b913-a1664815e12e"
 version = "0.2.0"
 
@@ -1486,6 +1486,12 @@ deps = ["PrecompileTools"]
 git-tree-sha1 = "725421ae8e530ec29bcbdddbe91ff8053421d023"
 uuid = "892a3eda-7b42-436c-8928-eab12a02cf0e"
 version = "0.4.1"
+
+[[deps.StructEquality]]
+deps = ["Compat"]
+git-tree-sha1 = "192a9f1de3cfef80ab1a4ba7b150bb0e11ceedcf"
+uuid = "6ec83bb0-ed9f-11e9-3b4c-2b04cb4e219c"
+version = "2.1.0"
 
 [[deps.StyledStrings]]
 uuid = "f489334b-da3d-4c2e-b8f0-e476e12c162b"
