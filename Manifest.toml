@@ -2,7 +2,7 @@
 
 julia_version = "1.11.6"
 manifest_format = "2.0"
-project_hash = "91151c9345a5a8c2ab4f5c33896b13f5ab366bc8"
+project_hash = "8bca56147fe2d38f857514825a7f664b8fdff2fd"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -1072,7 +1072,7 @@ uuid = "9237b28f-5490-5468-be7b-bb81f5f5e6cf"
 version = "10.1.4+3"
 
 [[deps.MissingLinks]]
-deps = ["ArchGDAL", "ArgParse", "Artifacts", "CSV", "Cairo", "Compat", "DataFrames", "DataStructures", "Dates", "EzXML", "Fontconfig", "GDAL", "Gadfly", "GeoDataFrames", "GeoFormatTypes", "GeoInterface", "Graphs", "Humanize", "LibGEOS", "LibSpatialIndex", "LinearAlgebra", "Logging", "MetaGraphsNext", "Mmap", "OpenStreetMapPBF", "ProgressMeter", "StatsBase", "ThreadsX"]
+deps = ["ArchGDAL", "ArgParse", "Artifacts", "CSV", "Cairo", "Compat", "DataFrames", "DataStructures", "Dates", "EzXML", "Fontconfig", "GDAL", "Gadfly", "GeoDataFrames", "GeoFormatTypes", "GeoInterface", "Graphs", "Humanize", "LibGEOS", "LibSpatialIndex", "LinearAlgebra", "Logging", "MetaGraphsNext", "Mmap", "OpenStreetMapPBF", "StatsBase", "ThreadsX"]
 path = "/Users/mwbc/.julia/dev/MissingLinks"
 uuid = "472ee5c9-fceb-493a-8c64-09683b8345c2"
 version = "0.1.0"

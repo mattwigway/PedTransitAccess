@@ -4,7 +4,6 @@ import MissingLinks: TraversalPermissionSettings, is_traversable
 import DataStructures: DefaultDict
 import MetaGraphsNext: label_for
 import Graphs: neighbors
-import LibSpatialIndex: RTree, knn
 
 # some software won't handle negative way IDs, so just put them well above currently numbered OSM ways.
 const STARTING_WAY_ID = 1 << 40

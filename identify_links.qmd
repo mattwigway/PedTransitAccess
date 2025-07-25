@@ -8,6 +8,9 @@ using Dates, DataFrames, DataFramesMeta, GeoDataFrames
 import ArchGDAL as AG
 import GeoFormatTypes as GFT
 import Serialization: serialize
+import MissingLinks: CandidateLink
+import StatsBase: competerank
+import PedTransitAccess: create_pbfs
 
 config = TOML.parsefile(joinpath(@__DIR__, ".Renviron"))
 DATA_PATH = config["DATA_PATH"]
@@ -26,23 +29,11 @@ G = remove_tiny_islands(G, 10)
 ```
 
 ```{julia}
-(nv(G), ne(G))
+@info "Graph has $(nv(G)) vertices and $(ne(G)) edges"
 ```
 
 ```{julia}
 graph_to_gis(joinpath(DATA_PATH, "data", "graph_orig.gpkg"), G; crs=GFT.EPSG(32119))
-```
-
-```{julia}
-MissingLinks.collapse_realized_graph!(G)
-```
-
-```{julia}
-(nv(G), ne(G))
-```
-
-```{julia}
-graph_to_gis(joinpath(DATA_PATH, "data", "graph.gpkg"), G; crs=GFT.EPSG(32119))
 ```
 
 ## Load GTFS files for the Triangle
@@ -102,52 +93,109 @@ metadata!(all_stops, "crs", GFT.EPSG(32119))
 stop_vertices = MissingLinks.link_points!(G, all_stops.geom, create=true)
 ```
 
-## Create weights
+## Partition graph
+
+It's too big to run all at once
 
 ```{julia}
-weights = zeros(Int32, nv(G))
-for (vertex, count) ∈ zip(stop_vertices, all_stops.trip_count)
-    weights[code_for(G, vertex)] += count
+Gs = MissingLinks.partition(G, 6, 4, 1000)
+
+(nv.(Gs), ne.(Gs))
+```
+
+## Check that it worked
+
+```{julia}
+for r in 1:size(Gs, 1), c in 1:size(Gs, 2)
+    graph_to_gis(joinpath(DATA_PATH, "data", "graph_partition.gpkg"), Gs[r, c];
+    crs=GFT.EPSG(32119), layer_name="row_$(r)_col_$(c)", update=r != 1 || c != 1)
 end
 ```
 
+## Run the algorithm by partition
+
 ```{julia}
 pop = GeoDataFrames.read(joinpath(DATA_PATH, "data", "population.gpkg"))
-origin_weights = create_graph_weights(G, pop, [:P1_001N], 1e-6)[:, 1]
-sum(origin_weights) / sum(pop.P1_001N)
 ```
-
-## Run algorithm
 
 ```{julia}
 algorithm_start = Dates.now()
 
-@info "Building distance matrix"
-dfile = open("distances.bin", "w+")
-matrix = Mmap.mmap(dfile, Matrix{UInt16}, (nv(G), nv(G)); grow=true)
+all_candidate_links = Matrix{Vector{CandidateLink}}(undef, size(Gs))
+# yes they all refer to the same object, but that's okay as this will be overwritten, not pushed to
+fill!(all_candidate_links, CandidateLink[])
+candidate_links = Matrix{Vector{CandidateLink}}(undef, size(Gs))
+fill!(candidate_links, CandidateLink[])
+scores = Matrix{Vector{Float64}}(undef, size(Gs))
+fill!(scores, Float64[])
 
-fill_distance_matrix!(G, matrix; maxdist=1000)
-```
+for r in 1:size(Gs, 1), c in 1:size(Gs, 2)
+    @info "Row $r, column $c"
 
-```{julia}
-all_candidate_links = identify_potential_missing_links(G, matrix, 100, 500)
-```
+    Gsub = Gs[r, c]
 
-```{julia}
-candidate_links = deduplicate_links(all_candidate_links, matrix, 100)
-```
+    @info "creating weights"
+    # Create the weights
+    weights = zeros(Int32, nv(Gsub))
+    for (vertex, count) ∈ zip(stop_vertices, all_stops.trip_count)
+        if haskey(Gsub, vertex)
+            weights[code_for(Gsub, vertex)] += count
+        end
+    end
 
-```{julia}
-scores = score_links(x -> x < 1000, candidate_links, matrix, origin_weights, dest_weights, 1000)
-```
+    origin_weights = create_graph_weights(Gsub, pop, [:P1_001N], 1e-6)[:, 1]
 
-```{julia}
+    open("distances.bin", "w") do dfile
+        @info "Building distance matrix"
+        dfile = open("distances.bin", "w+")
+        matrix = Mmap.mmap(dfile, Matrix{UInt16}, (nv(Gsub), nv(Gsub)); grow=true)
+
+        fill_distance_matrix!(Gsub, matrix; maxdist=1000)
+
+        @info "Identifying candidate links"
+        all_candidate_links[r, c] = identify_potential_missing_links(Gsub, matrix, 100, 500)
+
+        @info "deduplicating links"
+        candidate_links[r, c] = deduplicate_links(all_candidate_links[r, c], matrix, 100)
+
+        @info "scoring links"
+        scores[r, c] = score_links(x -> x < 1000, candidate_links[r, c], matrix, origin_weights, weights, 1000)
+    end
+
+    rm("distances.bin")
+end
+
 @info "Runtime: $(round((Dates.now() - algorithm_start), Minute))"
+```
+
+## Merge links back together
+
+```{julia}
+links, scores = MissingLinks.merge_links(G, Gs, candidate_links, scores)
 ```
 
 ## Write output
 
 ```{julia}
-serialize(joinpath(DATA_PATH, "data", "graph.jlobj"), G)
-serialize(joinpath(DATA_PATH, "data", "links_scores.jlobj"), collect(zip(candidate_links, scores)))
+ranks = competerank(scores, rev = true)
+
+GeoDataFrames.write(
+    joinpath(DATA_PATH, "data", "links.gpkg"),
+    links_to_gis(G, links, "score"=>scores, "rank" => ranks)
+)
+```
+
+## Insert top 100 links into network
+
+```{julia}
+create_pbfs(
+    joinpath(DATA_PATH, "data", "triangle.osm.pbf"),
+    joinpath(DATA_PATH, "data", "triangle-base.osm.pbf"),
+    joinpath(DATA_PATH, "data", "triangle-scenario.osm.pbf"),
+    links[ranks .≤ 100],
+    G
+)
+```
+
+```{julia}
 ```

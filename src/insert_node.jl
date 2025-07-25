@@ -11,9 +11,18 @@ function insert_node!(way, nodes, point; tol=1)
     geos_geom = MissingLinks.gdal_to_geos(way_geom)
     desired_offset = LibGEOS.project(geos_geom, MissingLinks.gdal_to_geos(point))
 
+    glen = AG.geomlength(way_geom)
+    if desired_offset ≥ glen
+        # short circuit return end
+        if desired_offset - glen > 1e-4
+            @error "trying to insert a point into way $(way.id) at distance $desired_offset, but length of way is only $glen"
+        end
+        return way.nodes[end]
+    end
+
     # is there an existing node we can use
     dist_from_desired = abs.(dists .- desired_offset)
-    if min(dist_from_desired) ≤ tol
+    if minimum(dist_from_desired) ≤ tol
         return way.nodes[argmin(dist_from_desired)]
     else
         # we need to insert a new node. Give it a positive node ID in case negative node IDs
@@ -25,7 +34,13 @@ function insert_node!(way, nodes, point; tol=1)
 
         # figure out where to put it
         before_idx = findfirst(dists .> desired_offset)
-        nodes[new_nid] = Node(new_nid, AG.gety(point, 0), AG.getx(point, 0), Dict())
+        pt_repr = AG.reproject(point, GFT.EPSG(32119), GFT.EPSG(4326), order=:trad)
+        nodes[new_nid] = Node(new_nid, AG.gety(pt_repr, 0), AG.getx(pt_repr, 0), Dict())
+
+        if isnothing(before_idx)
+            error("failed to insert $(nodes[new_nid]) into way $(way.id), requested distance $desired_offset, existing offsets $dists")
+        end
+
         insert!(way.nodes, before_idx, new_nid)
         return new_nid
     end
@@ -43,7 +58,7 @@ function node_distances(geom::AG.IGeometry{AG.wkbLineString})
     for i in 1:(AG.ngeom(geom) - 1)
         coord = [AG.getx(geom, i), AG.gety(geom, i)]
         dist += norm2(coord .- last_coord)
-        push!(dists)
+        push!(dists, dist)
         last_coord = coord
     end
 
@@ -70,19 +85,19 @@ end
 Create an RTree indexing the ways. The stored value is the position in the ways array, not the way ID.
 """
 function build_way_idx(ways, nodes)
-    idx = RTree(2)
+    rtree = RTree(2)
     for (idx, way) ∈ enumerate(ways)
         env = AG.envelope(get_way_geometry(way, nodes, CRS))
-        insert!(idx, [env.MinX, env.MinY], [env.MaxX, env.MaxY])
+        LibSpatialIndex.insert!(rtree, idx, [env.MinX, env.MinY], [env.MaxX, env.MaxY])
     end
 
-    return idx
+    return rtree
 end
 
 geos_to_gdal(pt::LibGEOS.Point) = AG.createpoint([LibGEOS.getGeomX(pt), LibGEOS.getGeomY(pt)])
 
 function find_closest(idx, pt, ways, nodes)
-    candidates = knn(idx, pt)
+    candidates = knn(idx, pt, 1)
     best_dist = typemax(Float64)
     best_candidate = nothing
     for candidate in candidates
@@ -104,7 +119,7 @@ function insert_links!(G, ways, nodes, links)
 
     way_id = STARTING_WAY_ID
     for link ∈ links
-        src_geom = MissingLinks.gdal_to_geos(G[label_for(G, link.fr_edge_src), label_for(G, link.fr_edge_tgt)])
+        src_geom = MissingLinks.gdal_to_geos(G[label_for(G, link.fr_edge_src), label_for(G, link.fr_edge_tgt)].geom)
         start = geos_to_gdal(LibGEOS.interpolate(src_geom, link.fr_dist_from_start))
 
         if label_for(G, link.fr_edge_src).type != :island
@@ -118,6 +133,8 @@ function insert_links!(G, ways, nodes, links)
             # and the way is modified in place.
             start_node = insert_node!(start_way, nodes, start)
         else
+            # this is an island stop - i.e. there is no OSM way here
+            # create a new node at the island for R5 to snap to, and then connect it up with a new way
             new_node_id = STARTING_NODE_ID
             while haskey(nodes, new_node_id)
                 new_node_id += 1
@@ -126,9 +143,10 @@ function insert_links!(G, ways, nodes, links)
             start_node = new_node_id
         end
 
+        dst_geom = MissingLinks.gdal_to_geos(G[label_for(G, link.to_edge_src), label_for(G, link.to_edge_tgt)].geom)
+        endd = geos_to_gdal(LibGEOS.interpolate(dst_geom, link.to_dist_from_start))
+
         if label_for(G, link.to_edge_src).type != :island        
-            dst_geom = MissingLinks.gdal_to_geos(G[label_for(G, link.to_edge_src), label_for(G, link.to_edge_tgt)])
-            endd = geos_to_gdal(LibGEOS.interpolate(dst_geom, link.to_dist_from_start))
             end_way, end_way_dist = find_closest(idx, endd, ways, nodes)
             @assert end_way_dist .< 1e-6 # should be basically on the way
 

@@ -3,6 +3,8 @@ import ArchGDAL as AG
 import GeoFormatTypes as GFT
 import LinearAlgebra: norm2
 import LibGEOS
+import LibSpatialIndex: RTree, knn
+import LibSpatialIndex
 
 const CRS = GFT.EPSG(32119)
 
