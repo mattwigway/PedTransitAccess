@@ -139,7 +139,10 @@ function insert_links!(G, ways, nodes, links)
             while haskey(nodes, new_node_id)
                 new_node_id += 1
             end
-            nodes[new_node_id] = Node(new_node_id, AG.gety(start, 0), AG.getx(start, 0), Dict())
+
+            start_pr = AG.reproject(start, GFT.EPSG(32119), GFT.EPSG(4326), order=:trad)
+
+            nodes[new_node_id] = Node(new_node_id, AG.gety(start_pr, 0), AG.getx(start_pr, 0), Dict())
             start_node = new_node_id
         end
 
@@ -156,7 +159,10 @@ function insert_links!(G, ways, nodes, links)
             while haskey(nodes, new_node_id)
                 new_node_id += 1
             end
-            nodes[new_node_id] = Node(new_node_id, AG.gety(endd, 0), AG.getx(endd, 0), Dict())
+
+            end_pr = AG.reproject(endd, GFT.EPSG(32119), GFT.EPSG(4326), order=:trad)
+
+            nodes[new_node_id] = Node(new_node_id, AG.gety(end_pr, 0), AG.getx(end_pr, 0), Dict())
             end_node = new_node_id
         end
 
