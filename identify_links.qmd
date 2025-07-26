@@ -17,6 +17,7 @@ DATA_PATH = config["DATA_PATH"]
 ```
 
 ```{julia}
+# bbox: -79.2793,36.1195,-78.3099,35.5639
 G = MissingLinks.graph_from_osm(
     joinpath(DATA_PATH, "data", "triangle.osm.pbf"),
     MissingLinks.TraversalPermissionSettings(),
@@ -98,9 +99,10 @@ stop_vertices = MissingLinks.link_points!(G, all_stops.geom, create=true)
 It's too big to run all at once
 
 ```{julia}
-Gs = MissingLinks.partition(G, 6, 4, 1000)
+Gs = MissingLinks.partition(G, 6, 4, 1100)
 
-(nv.(Gs), ne.(Gs))
+@info "vertices per partition" nv.(Gs)
+@info "edges per partition" ne.(Gs)
 ```
 
 ## Check that it worked
@@ -115,7 +117,8 @@ end
 ## Run the algorithm by partition
 
 ```{julia}
-pop = GeoDataFrames.read(joinpath(DATA_PATH, "data", "population.gpkg"))
+hu = GeoDataFrames.read(joinpath(DATA_PATH, "data", "hu.gpkg"))
+origin_weights = create_graph_weights(G, hu, [:H1_001N], 1e-6)[:, 1]
 ```
 
 ```{julia}
@@ -138,12 +141,12 @@ for r in 1:size(Gs, 1), c in 1:size(Gs, 2)
     # Create the weights
     weights = zeros(Int32, nv(Gsub))
     for (vertex, count) ∈ zip(stop_vertices, all_stops.trip_count)
-        if haskey(Gsub, vertex)
-            weights[code_for(Gsub, vertex)] += count
+        if haskey(Gsub.G, vertex)
+            weights[code_for(Gsub.G, vertex)] += count
         end
     end
 
-    origin_weights = create_graph_weights(Gsub, pop, [:P1_001N], 1e-6)[:, 1]
+    sub_origin_weights = MissingLinks.partition_weights(G, Gsub, origin_weights)
 
     open("distances.bin", "w") do dfile
         @info "Building distance matrix"
@@ -159,7 +162,7 @@ for r in 1:size(Gs, 1), c in 1:size(Gs, 2)
         candidate_links[r, c] = deduplicate_links(all_candidate_links[r, c], matrix, 100)
 
         @info "scoring links"
-        scores[r, c] = score_links(x -> x < 1000, candidate_links[r, c], matrix, origin_weights, weights, 1000)
+        scores[r, c] = score_links(x -> x < 1000, candidate_links[r, c], matrix, sub_origin_weights, weights, 1000)
     end
 
     rm("distances.bin")
@@ -195,6 +198,46 @@ create_pbfs(
     links[ranks .≤ 100],
     G
 )
+```
+
+## Create the figure that shows network partitioning
+
+```{julia}
+extent = MissingLinks.extent(G)
+rowct = size(Gs, 1)
+colct = size(Gs, 2)
+row_size = (extent.max_y - extent.min_y) / rowct
+col_size = (extent.max_x - extent.min_x) / colct
+buffer = 1000
+
+# Ref prevents Iterators.flatten from continuing into the tuple
+geoms = DataFrame(:geometry => map(Iterators.flatten(Ref.(Iterators.product(1:colct, 1:rowct)))) do (c, r)
+    xmin = extent.min_x + col_size * (c - 1)
+    xmax = xmin + col_size
+    ymin = extent.min_y + row_size * (r - 1)
+    ymax = ymin + row_size
+
+    xmin -= buffer
+    ymin -= buffer
+    xmax += buffer
+    ymax += buffer
+
+    AG.createpolygon([[
+        [xmin, ymin],
+        [xmax, ymin],
+        [xmax, ymax],
+        [xmin, ymax],
+        [xmin, ymin]
+    ]])
+end, :id => 1:(rowct * colct))
+
+GeoDataFrames.write(joinpath(DATA_PATH, "data", "partition_cells.gpkg"), geoms, crs=GFT.EPSG(32119))
+```
+
+```{julia}
+nodes = nodes_to_gis(G)
+nodes.origin_weight = origin_weights
+GeoDataFrames.write(DATA_PATH, )
 ```
 
 ```{julia}
