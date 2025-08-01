@@ -6,7 +6,7 @@ library(tidyverse)
 library(jsonlite)
 DATA_PATH = Sys.getenv("DATA_PATH")
 
-variant = "scenario"
+variant = "rus"
 
 # create config file to control linking distance
 

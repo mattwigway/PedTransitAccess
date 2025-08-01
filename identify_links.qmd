@@ -204,7 +204,7 @@ create_pbfs(
 
 ```{julia}
 # note that this won't work if the OSM input data are changed
-rus = collect(filter(l -> l.fr_edge_src == 42244 && l.to_edge_src == 134841, links))
+rus = collect(filter(l -> l.fr_edge_src == 134841 && l.to_edge_src == 173384, links))
 @assert length(rus) == 1
 @assert first(rus).geographic_length_m == 21
 

@@ -1,5 +1,5 @@
 options(java.parameters="-Xmx4G")
-options(r5r.r5jar="../r5/build/libs/r5-v7.4.dirty-all.jar")
+options(r5r.r5jar="../r5/build/libs/r5-v7.4-rc.4-3-gafb7941.dirty-all.jar")
 devtools::load_all("../r5r/r-package")
 library(sf)
 library(tidyverse)
@@ -27,8 +27,10 @@ write_sf(iso, file.path(DATA_PATH, "data", glue::glue("iso_{variant}.gpkg")))
 # and make the transit isochrone for someone living in the apt at the end of the link
 apt = tribble(
     ~id, ~lat, ~lon,
-    "apt", 35.84951750734412, -78.69066513451033
+    "apt", 35.850682612449454, -78.69217349571225
 )
+
+write_sf(st_as_sf(apt, coords=c("lon", "lat"), crs=4326), file.path(DATA_PATH, "data", "origin.gpkg"))
 
 tr_iso = isochrone(
     r5,
