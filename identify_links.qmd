@@ -200,6 +200,23 @@ create_pbfs(
 )
 ```
 
+## Create the RUS link example
+
+```{julia}
+# note that this won't work if the OSM input data are changed
+rus = collect(filter(l -> l.fr_edge_src == 42244 && l.to_edge_src == 134841, links))
+@assert length(rus) == 1
+@assert first(rus).geographic_length_m == 21
+
+create_pbfs(
+    joinpath(DATA_PATH, "data", "triangle.osm.pbf"),
+    nothing,
+    joinpath(DATA_PATH, "data", "triangle-rus.osm.pbf"),
+    rus,
+    G
+)
+```
+
 ## Create the figure that shows network partitioning
 
 ```{julia}
@@ -232,12 +249,6 @@ geoms = DataFrame(:geometry => map(Iterators.flatten(Ref.(Iterators.product(1:co
 end, :id => 1:(rowct * colct))
 
 GeoDataFrames.write(joinpath(DATA_PATH, "data", "partition_cells.gpkg"), geoms, crs=GFT.EPSG(32119))
-```
-
-```{julia}
-nodes = nodes_to_gis(G)
-nodes.origin_weight = origin_weights
-GeoDataFrames.write(DATA_PATH, )
 ```
 
 ```{julia}

@@ -1,13 +1,17 @@
 options(java.parameters="-Xmx4G")
-library(r5r)
+options(r5r.r5jar="../r5/build/libs/r5-v7.4.dirty-all.jar")
+devtools::load_all("../r5r/r-package")
 library(sf)
 library(tidyverse)
+library(jsonlite)
 DATA_PATH = Sys.getenv("DATA_PATH")
 
 variant = "scenario"
 
-# todo gotta figure out how to control linking distance here...
-r5 = setup_r5(file.path(DATA_PATH, "networks", variant), verbose=T, overwrite=T)
+# create config file to control linking distance
+
+write_json(list(stopLinkRadiusMeters=unbox(20)), file.path(DATA_PATH, "networks", variant, "config.json"))
+r5 = build_network(file.path(DATA_PATH, "networks", variant), verbose=T, overwrite=T)
 
 blocks = read_sf(file.path(DATA_PATH, "data", "population.gpkg"))
 jobs = read_csv(file.path(DATA_PATH, "data", "nc_wac_S000_JT00_2022.csv.gz"), col_types=cols(w_geocode=col_character()))
@@ -21,6 +25,7 @@ blocks = blocks |>
 points = st_centroid(blocks) |> st_transform(4326)
 
 acc = accessibility(
+    r5,
     r5,
     points,
     points,
