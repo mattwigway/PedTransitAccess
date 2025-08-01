@@ -30,7 +30,9 @@ function create_pbfs(input, baseout, scenout, links, G)
         end
     end
 
-    write_pbf(baseout, values(nodes), ways, [])
+    if !isnothing(baseout)
+        write_pbf(baseout, values(nodes), ways, [])
+    end
 
     insert_links!(G, ways, nodes, links)
 
