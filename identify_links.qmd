@@ -8,9 +8,9 @@ using Dates, DataFrames, DataFramesMeta, GeoDataFrames
 import ArchGDAL as AG
 import GeoFormatTypes as GFT
 import Serialization: serialize
-import MissingLinks: CandidateLink
 import StatsBase: competerank
 import PedTransitAccess: create_pbfs
+import MissingLinks: CandidateLink
 
 config = TOML.parsefile(joinpath(@__DIR__, ".Renviron"))
 DATA_PATH = config["DATA_PATH"]
@@ -20,13 +20,9 @@ DATA_PATH = config["DATA_PATH"]
 # bbox: -79.2793,36.1195,-78.3099,35.5639
 G = MissingLinks.graph_from_osm(
     joinpath(DATA_PATH, "data", "triangle.osm.pbf"),
-    MissingLinks.TraversalPermissionSettings(),
+    MissingLinks.DEFAULT_TRAVERSAL_SETTINGS,
     GFT.EPSG(32119) # State Plane NC, meters
 )
-```
-
-```{julia}
-G = remove_tiny_islands(G, 10)
 ```
 
 ```{julia}
@@ -88,10 +84,12 @@ all_stops = vcat(
 
 metadata!(all_stops, "geometrycolumns", (:geom,))
 metadata!(all_stops, "crs", GFT.EPSG(32119))
+
+GeoDataFrames.write(joinpath(DATA_PATH, "data", "stops.gpkg"), all_stops; crs=GFT.EPSG(32119))
 ```
 
 ```{julia}
-stop_vertices = MissingLinks.link_points!(G, all_stops.geom, create=true)
+stop_vertices = MissingLinks.link_points!(G, all_stops.geom, create=true, tol=20)
 ```
 
 ## Partition graph
@@ -129,8 +127,8 @@ all_candidate_links = Matrix{Vector{CandidateLink}}(undef, size(Gs))
 fill!(all_candidate_links, CandidateLink[])
 candidate_links = Matrix{Vector{CandidateLink}}(undef, size(Gs))
 fill!(candidate_links, CandidateLink[])
-scores = Matrix{Vector{Float64}}(undef, size(Gs))
-fill!(scores, Float64[])
+score_matrix = Matrix{Vector{Float64}}(undef, size(Gs))
+fill!(score_matrix, Float64[])
 
 for r in 1:size(Gs, 1), c in 1:size(Gs, 2)
     @info "Row $r, column $c"
@@ -159,10 +157,10 @@ for r in 1:size(Gs, 1), c in 1:size(Gs, 2)
         all_candidate_links[r, c] = identify_potential_missing_links(Gsub, matrix, 100, 500)
 
         @info "deduplicating links"
-        candidate_links[r, c] = deduplicate_links(all_candidate_links[r, c], matrix, 100)
+        candidate_links[r, c] = deduplicate_links(Gsub, all_candidate_links[r, c], matrix, 100)
 
         @info "scoring links"
-        scores[r, c] = score_links(x -> x < 1000, candidate_links[r, c], matrix, sub_origin_weights, weights, 1000)
+        score_matrix[r, c] = score_links(x -> x < 1000, Gsub, candidate_links[r, c], matrix, sub_origin_weights, weights, 1000)
     end
 
     rm("distances.bin")
@@ -174,7 +172,7 @@ end
 ## Merge links back together
 
 ```{julia}
-links, scores = MissingLinks.merge_links(G, Gs, candidate_links, scores)
+links, scores = MissingLinks.merge_links(G, Gs, candidate_links, score_matrix)
 ```
 
 ## Write output
@@ -193,63 +191,27 @@ GeoDataFrames.write(
 ```{julia}
 create_pbfs(
     joinpath(DATA_PATH, "data", "triangle.osm.pbf"),
-    joinpath(DATA_PATH, "data", "triangle-base.osm.pbf"),
-    joinpath(DATA_PATH, "data", "triangle-scenario.osm.pbf"),
+    joinpath(DATA_PATH, "networks", "baseline", "triangle-base.osm.pbf"),
+    joinpath(DATA_PATH, "networks", "scenario", "triangle-scenario.osm.pbf"),
     links[ranks .≤ 100],
     G
 )
 ```
 
-## Create the RUS link example
+## Create the Carolina Corporate Center link example
 
 ```{julia}
-# note that this won't work if the OSM input data are changed
-rus = collect(filter(l -> l.fr_edge_src == 134841 && l.to_edge_src == 173384, links))
-@assert length(rus) == 1
-@assert first(rus).geographic_length_m == 21
+# note that this may not work if the OSM input data are changed and there are edits near Carolina Corporate Center
+# to_edge_src is a split b/c of the transit stop
+ccc = collect(filter(l -> l.fr_edge_src == VertexID(1431908213, :node) && l.to_edge_tgt == VertexID(6110164332, :node) && l.to_edge_src.type == :split, links))
+@assert length(ccc) == 1
+@assert first(ccc).geographic_length_m == 30
 
 create_pbfs(
     joinpath(DATA_PATH, "data", "triangle.osm.pbf"),
     nothing,
-    joinpath(DATA_PATH, "data", "triangle-rus.osm.pbf"),
-    rus,
+    joinpath(DATA_PATH, "data", "triangle-ccc.osm.pbf"),
+    ccc,
     G
 )
-```
-
-## Create the figure that shows network partitioning
-
-```{julia}
-extent = MissingLinks.extent(G)
-rowct = size(Gs, 1)
-colct = size(Gs, 2)
-row_size = (extent.max_y - extent.min_y) / rowct
-col_size = (extent.max_x - extent.min_x) / colct
-buffer = 1000
-
-# Ref prevents Iterators.flatten from continuing into the tuple
-geoms = DataFrame(:geometry => map(Iterators.flatten(Ref.(Iterators.product(1:colct, 1:rowct)))) do (c, r)
-    xmin = extent.min_x + col_size * (c - 1)
-    xmax = xmin + col_size
-    ymin = extent.min_y + row_size * (r - 1)
-    ymax = ymin + row_size
-
-    xmin -= buffer
-    ymin -= buffer
-    xmax += buffer
-    ymax += buffer
-
-    AG.createpolygon([[
-        [xmin, ymin],
-        [xmax, ymin],
-        [xmax, ymax],
-        [xmin, ymax],
-        [xmin, ymin]
-    ]])
-end, :id => 1:(rowct * colct))
-
-GeoDataFrames.write(joinpath(DATA_PATH, "data", "partition_cells.gpkg"), geoms, crs=GFT.EPSG(32119))
-```
-
-```{julia}
 ```
