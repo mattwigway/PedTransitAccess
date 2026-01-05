@@ -119,10 +119,10 @@ function insert_links!(G, ways, nodes, links)
 
     way_id = STARTING_WAY_ID
     for link ∈ links
-        src_geom = MissingLinks.gdal_to_geos(G[label_for(G, link.fr_edge_src), label_for(G, link.fr_edge_tgt)].geom)
+        src_geom = MissingLinks.gdal_to_geos(G[link.fr_edge_src, link.fr_edge_tgt].geom)
         start = geos_to_gdal(LibGEOS.interpolate(src_geom, link.fr_dist_from_start))
 
-        if label_for(G, link.fr_edge_src).type != :island
+        if link.fr_edge_src.type != :island
             # no need to check fr_edge_tgt - island nodes are always connected to other island nodes    
             # find the closest way. It is possible this will not be the right way if the link connects at an intersection,
             # but topologically that's okay - it will just connect to the intersection which is connected to the right way.
@@ -146,10 +146,10 @@ function insert_links!(G, ways, nodes, links)
             start_node = new_node_id
         end
 
-        dst_geom = MissingLinks.gdal_to_geos(G[label_for(G, link.to_edge_src), label_for(G, link.to_edge_tgt)].geom)
+        dst_geom = MissingLinks.gdal_to_geos(G[link.to_edge_src, link.to_edge_tgt].geom)
         endd = geos_to_gdal(LibGEOS.interpolate(dst_geom, link.to_dist_from_start))
 
-        if label_for(G, link.to_edge_src).type != :island        
+        if link.to_edge_src.type != :island        
             end_way, end_way_dist = find_closest(idx, endd, ways, nodes)
             @assert end_way_dist .< 1e-6 # should be basically on the way
 
