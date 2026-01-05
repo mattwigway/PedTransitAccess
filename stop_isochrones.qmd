@@ -27,7 +27,7 @@ points = tribble(
     "Wilmington St at Davie St", 35.77630917507466, -78.63820684124929,
     "Falls of Neuse Road at Weathergreen Drive", 35.88893263462923, -78.62728248774914
 ) |>
-    mutate(id=1:n()) |>
+    mutate(id=1:n(), loc=ordered(loc, levels=loc)) |>
     st_as_sf(coords=c("lon", "lat"), crs=4326)
 ```
 
@@ -63,16 +63,12 @@ tm_shape(isos) +
         # This ?fmt=.png doesn't do anything on the MapBox end but allows the autodetection of the formatting to work
         tm_basemap(server=paste0("https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/512/{z}/{x}/{y}@2x?fmt=.png&access_token=", Sys.getenv("MAPBOX_API_KEY"))) +
         tm_facets_wrap(by="loc") +
-    tm_scalebar(position=tm_pos_out("left", "bottom")) +
-    tm_credits("Basemap © OpenStreetMap contributors, Mapbox", position=tm_pos_out("right", "bottom"))
+    tm_scalebar(position=tm_pos_out("center", "bottom")) +
+    tm_credits("Basemap © OpenStreetMap contributors, Mapbox", position=tm_pos_out("center", "bottom"))
 
 tmap_save(map, here::here("paper/figures/catchement.png"), width=8, height=4)
 ```
 
-## Save for mapping
-
 ```{r}
-write_sf(points, file.path(Sys.getenv("DATA_PATH"), "iso_figure", "data.gpkg"), layer="points")
-write_sf(buff, file.path(Sys.getenv("DATA_PATH"), "iso_figure", "data.gpkg"), layer="buffer")
-write_sf(isos, file.path(Sys.getenv("DATA_PATH"), "iso_figure", "data.gpkg"), layer="isochrones")
+
 ```
