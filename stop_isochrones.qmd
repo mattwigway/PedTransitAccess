@@ -1,26 +1,38 @@
 ```{r}
-options(java.parameters="-Xmx4G")
-library(r5r)
+# note: currently using a custom build of R5, https://github.com/mattwigway/r5/tree/configurable-linking-distance
+# PR opened: https://github.com/conveyal/r5/pull/974
+options(java.parameters="-Xmx4G", r5r.r5jar="../r5/build/libs/r5-v7.5-7-g996dd94-all.jar")
+#library(r5r)
+devtools::load_all("../r5r/r-package")
 library(tidyverse)
 library(sf)
+library(basemaps)
+library(gridExtra)
+library(ggunc)
+library(ggspatial)
+library(tmap)
+
+basemaps::set_defaults(map_token=Sys.getenv("MAPBOX_API_KEY"), map_dir="~/Library/Caches/basemaps-r")
+
+Sys.setenv("PROJ_LIB"="/Users/mwbc/Library/Caches/org.R-project.R/R/renv/cache/v5/macos/R-4.5/aarch64-apple-darwin20/sf/1.0-23/ce0c8d7dc7715a383d874eb5be01edd5/sf/proj")
 ```
 
 ```{r}
-r5 = setup_r5(file.path(Sys.getenv("DATA_PATH"), "networks", "baseline"))
+r5 = build_network(file.path(Sys.getenv("DATA_PATH"), "networks", "baseline"))
 ```
 
 ```{r}
 points = tribble(
     ~loc, ~lat, ~lon,
-    "Falls of Neuse Road at Weathergreen Drive", 35.88893263462923, -78.62728248774914,
-    "Wilmington St at Davie St", 35.77630917507466, -78.63820684124929
+    "Wilmington St at Davie St", 35.77630917507466, -78.63820684124929,
+    "Falls of Neuse Road at Weathergreen Drive", 35.88893263462923, -78.62728248774914
 ) |>
     mutate(id=1:n()) |>
     st_as_sf(coords=c("lon", "lat"), crs=4326)
 ```
 
 ```{r}
-isos = isochrone(r5, points, mode="walk", cutoffs=c(20), max_walk_time=20)
+isos = isochrone(r5, origins=points, mode="walk", cutoffs=c(20.0), max_walk_time=20, zoom=11)
 ```
 
 ```{r}
@@ -28,6 +40,33 @@ buff = points |>
     st_transform(32119) |>
     st_buffer(1200) |>
     st_transform(4326)
+```
+
+```{r}
+isos$loc = points$loc
+```
+
+## Plot
+
+```{r}
+pal = ggunc::unc_pal()(3)
+
+map = tm_shape(buff) +
+        tm_crs(3857) +
+        tm_polygons(buff, fill="black", fill_alpha=0, col="black") +
+        tm_facets_wrap(by="loc")+
+tm_shape(isos) +
+        tm_polygons(isos, fill=pal[[1]], fill_alpha=0.25) +
+        tm_facets_wrap(by="loc") +
+    tm_shape(points) +
+        tm_dots(points, fill=pal[[3]]) +
+        # This ?fmt=.png doesn't do anything on the MapBox end but allows the autodetection of the formatting to work
+        tm_basemap(server=paste0("https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/512/{z}/{x}/{y}@2x?fmt=.png&access_token=", Sys.getenv("MAPBOX_API_KEY"))) +
+        tm_facets_wrap(by="loc") +
+    tm_scalebar(position=tm_pos_out("left", "bottom")) +
+    tm_credits("Basemap © OpenStreetMap contributors, Mapbox", position=tm_pos_out("right", "bottom"))
+
+tmap_save(map, here::here("paper/figures/catchement.png"), width=8, height=4)
 ```
 
 ## Save for mapping
