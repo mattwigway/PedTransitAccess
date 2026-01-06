@@ -95,7 +95,7 @@ $$
 \displaystyle\sum_i \sum_s p_i w_s f(d_{is})
 $$ {#eq-access}
 
-where $i$ is an index of all nodes in the graph, $p_i$ is the population assigned to each node, $w_s$ is the weight (number of trips) assigned to stop $s$, and $d_{is}$ is the network distance from node $i$ to stop $s$. Population data is block-level data from the 2020 Census, evenly divided among each edge in the Census block. Since node weights are required, the weight of each edge is allocated evenly between its two nodes.
+where $i$ is an index of all nodes in the graph, $p_i$ is the number of housing units assigned to each node, $w_s$ is the weight (number of trips) assigned to stop $s$, and $d_{is}$ is the network distance from node $i$ to stop $s$. Housing unit data is block-level data from the 2020 Census, evenly divided among each edge in the Census block. Since node weights are required, the weight of each edge is allocated evenly between its two nodes.
 
 $f(d_{is})$ is the impedance function, which in this case is simply
 
@@ -106,7 +106,7 @@ f(d_{is}) = \begin{cases}
 \end{cases}
 $$ {#eq-cutoff}
 
-The weight assigned to a stop is the number of vehicles that serve that stop on a typical weekday, so stops that are served more frequently will have a higher impact on overall accessibility. Similarly, stops that serve a larger number of people will have a greater impact on overall accessibility. I rank the identified links based on the impact each link individually has on the accessibility in @eq-access.
+The weight assigned to a stop is the number of vehicles that serve that stop on a typical weekday, so stops that are served more frequently will have a higher impact on overall accessibility. Similarly, stops that serve a larger number of housing units will have a greater impact on overall accessibility. I rank the identified links based on the impact each link individually has on the accessibility in @eq-access.
 
 The Research Triangle network is much larger than the Charlotte network used by Bhagat-Conway et al. [-@bhagat-conway_close_2025], with 573,000 vertices and 672,000 edges (as opposed to 140,000/160,000). In initial testing, I found that identifying, deduplicating, and scoring links in this large network had unsatisfactory performance. However, since pedestrian accessibility is only affected by the network in the local area, I solve this problem by partitioning the network into 24 sub-networks in a regular grid.
 
