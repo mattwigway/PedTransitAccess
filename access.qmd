@@ -23,7 +23,7 @@ ccc = build_network(file.path(DATA_PATH, "networks", "ccc"), verbose=T, overwrit
 ```
 
 ```{r}
-blocks = read_sf(file.path(DATA_PATH, "data", "population.gpkg"))
+blocks = read_sf(file.path(DATA_PATH, "data", "hu.gpkg"))
 jobs = read_csv(file.path(DATA_PATH, "data", "nc_wac_S000_JT00_2023.csv.gz"), col_types=cols(w_geocode=col_character()))
 ```
 
