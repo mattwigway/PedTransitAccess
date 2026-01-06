@@ -238,13 +238,13 @@ acc_scenario = accessibility(
 block_acc = blocks |>
     left_join(select(acc_base, id, acc_base=accessibility), by="id") |>
     left_join(select(acc_scenario, id, acc_scenario=accessibility), by="id") |>
-    mutate(acc_inc = acc_scenario - acc_base)
+    mutate(acc_inc = acc_scenario - acc_base, acc_pct = acc_scenario / acc_base - 1)
 ```
 
 ```{r}
 # -1e-6 because some that are 0 are actually very slightly below
 # due to precision issues
-stopifnot(all(block_acc$acc_inc > -1e-6))
+#stopifnot(all(block_acc$acc_inc > -1e-6))
 
 # This is actually not the case due to rounding, and it's incredibly confusing. One example is 370630015042006.
 # This one has a link added nearby that actually isn't used to access many destinations, but it does affect the
@@ -258,11 +258,15 @@ stopifnot(all(block_acc$acc_inc > -1e-6))
 ```
 
 ```{r}
-tm_basemap(server=paste0("https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/512/{z}/{x}/{y}@2x?fmt=.png&access_token=", Sys.getenv("MAPBOX_API_KEY"))) +
-    tm_shape(isos) + # just to get the scale right
+acc_map = tm_basemap(server=paste0("https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/512/{z}/{x}/{y}@2x?fmt=.png&access_token=", Sys.getenv("MAPBOX_API_KEY"))) +
     tm_shape(filter(block_acc, acc_inc > 0)) +
-    tm_polygons(fill="acc_inc", fill_alpha=0.75, col_alpha=0) +
-    tm_scalebar()
+    tm_polygons(fill="acc_inc", fill.scale=tm_scale_intervals(style="fixed", breaks=c(1, 500, 1000, 5000, 10000, 105000)), fill_alpha=0.75, col_alpha=0, tm_legend(title="Increase in Job Access", position=tm_pos_in("right", "top"))) +
+    tm_shape(filter(links, rank <= 100) |> mutate(label="New links")) +
+    tm_dots(fill="label", fill.scale=tm_scale(values=c("red")), fill.legend=tm_legend(title="", position=tm_pos_in("right", "top"))) +
+    tm_scalebar() +
+    tm_credits("Basemap © OpenStreetMap contributors, Mapbox")
+
+tmap_save(acc_map, here::here("paper", "figures", "regional.png"), width=8, height=7, bg="white")
 ```
 
 ```{r}
@@ -270,72 +274,4 @@ write_sf(block_acc, file.path(DATA_PATH, "data", "acc_change.gpkg"))
 write_sf(r5r::street_network_to_sf(base)$edges, file.path(DATA_PATH, "data", "base_net_r5.gpkg"))
 write_sf(r5r::street_network_to_sf(scenario)$edges, file.path(DATA_PATH, "data", "scenario_net_r5.gpkg"))
 
-```
-
-```{r}
-problem_pts = st_transform(st_centroid(block_acc[block_acc$acc_inc < -1e-6,]), 4326)
-
-problem_base_iso = isochrone(
-    base,
-    base,
-    problem_pts,
-    mode = "WALK",
-    time_window=120L,
-    cutoffs=c(18),
-    departure_datetime=as.POSIXct("2025-07-17 07:00:00"),
-    zoom=11
-) |> mutate(scenario="Base")
-
-problem_scen_iso = isochrone(
-    scenario,
-    scenario,
-    problem_pts,
-    mode = "WALK",
-    time_window=120L,
-    cutoffs=c(18),
-    departure_datetime=as.POSIXct("2025-07-17 07:00:00"),
-    zoom=11
-) |>
-    mutate(scenario="Scenario")
-````
-
-```{r}
-rbind(problem_base_iso, problem_scen_iso) |>
-    write_sf(file.path(DATA_PATH, "data", "problem_isos.gpkg"))
-```
-
-```{r}
-v = street_network_to_sf(base)$vertices
-v$id = v$index
-
-problem_tt_base = travel_time_matrix(
-    base,
-    base,
-    problem_pts,
-    v,
-    mode = "TRANSIT",
-    time_window=120L,
-    departure_datetime=as.POSIXct("2025-07-17 07:00:00")
-)
-
-problem_tt_scen = travel_time_matrix(
-    scenario,
-    scenario,
-    problem_pts,
-    v,
-    mode = "TRANSIT",
-    time_window=120L,
-    departure_datetime=as.POSIXct("2025-07-17 07:00:00")
-)
-```
-
-```{r}
-
-problem_tt = problem_tt_base[problem_tt_scen[,.(from_id, to_id, travel_time_p50_scen=travel_time_p50)], on=c("from_id", "to_id")]
-
-problem_tt_sf = problem_tt |>
-    left_join(mutate(v, id=as.character(id)), by=c("to_id"="id"))
-
-problem_tt_sf |>
-    write_sf(file.path(DATA_PATH, "data", "travel_time_problems.gpkg"))
 ```
