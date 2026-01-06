@@ -189,14 +189,15 @@ tr_iso_map = tm_basemap(server=paste0("https://api.mapbox.com/styles/v1/mapbox/s
         ) +
         tm_scalebar() +
     tm_shape(mutate(ccc_loc, label="Origin")) +
-        tm_dots(fill="label", size=1, fill.scale=tm_scale(values=c("red")), fill.legend=tm_legend(show=T, title="", position=tm_pos_in("right", "top")))
+        tm_dots(fill="label", size=1, fill.scale=tm_scale(values=c("red")), fill.legend=tm_legend(show=T, title="", position=tm_pos_in("right", "top"))) +
+    tm_logo(here::here("paper/figures/mapbox-logo-black.png"), height=1.5, position=tm_pos_in("LEFT", "BOTTOM"), margin=0.5)
 
 tr_iso_map
 ```
 
 
 ```{r}
-single_link_map = tmap_arrange(walk_iso_map + tm_credits("Basemaps © OpenStreetMap contributors, Esri, Mapbox", position=tm_pos_out("center", "bottom")), tr_iso_map)
+single_link_map = tmap_arrange(walk_iso_map + tm_credits("Basemaps © OpenStreetMap contributors, Esri, Mapbox, NC CGIA, Microsoft, Vantor", position=tm_pos_out("center", "bottom")), tr_iso_map)
 single_link_map
 
 tmap_save(single_link_map, here::here("paper/figures/single_link.png"), width=8, height=4, bg="white")
@@ -264,7 +265,8 @@ acc_map = tm_basemap(server=paste0("https://api.mapbox.com/styles/v1/mapbox/stre
     tm_shape(filter(links, rank <= 100) |> mutate(label="New links")) +
     tm_dots(fill="label", fill.scale=tm_scale(values=c("red")), fill.legend=tm_legend(title="", position=tm_pos_in("right", "top"))) +
     tm_scalebar() +
-    tm_credits("Basemap © OpenStreetMap contributors, Mapbox")
+    tm_credits("Basemap © OpenStreetMap contributors, Mapbox") +
+    tm_logo(here::here("paper/figures/mapbox-logo-black.png"), height=1.5, position=tm_pos_in("LEFT", "BOTTOM"), margin=0.5)
 
 tmap_save(acc_map, here::here("paper", "figures", "regional.png"), width=8, height=7, bg="white")
 ```
