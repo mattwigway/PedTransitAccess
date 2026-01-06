@@ -1,0 +1,341 @@
+```{r}
+options(java.parameters="-Xmx4G", r5r.r5jar="../r5/build/libs/r5-v7.5-7-g996dd94-all.jar")
+devtools::load_all("../r5r/r-package")
+library(sf)
+library(tidyverse)
+library(jsonlite)
+library(tmap)
+library(ggunc)
+DATA_PATH = Sys.getenv("DATA_PATH")
+
+prj <- system.file("proj", package = "sf")[1]
+Sys.setenv("PROJ_LIB" = prj)
+```
+
+```{r}
+# create config file to control linking distance
+write_json(list(minSubgraphSize=unbox(0), stopLinkRadiusMeters=unbox(20)), file.path(DATA_PATH, "networks", "baseline", "config.json"))
+base = build_network(file.path(DATA_PATH, "networks", "baseline"), verbose=T, overwrite=T)
+write_json(list(minSubgraphSize=unbox(0), stopLinkRadiusMeters=unbox(20)), file.path(DATA_PATH, "networks", "scenario", "config.json"))
+scenario = build_network(file.path(DATA_PATH, "networks", "scenario"), verbose=T, overwrite=T)
+write_json(list(minSubgraphSize=unbox(0), stopLinkRadiusMeters=unbox(20)), file.path(DATA_PATH, "networks", "ccc", "config.json"))
+ccc = build_network(file.path(DATA_PATH, "networks", "ccc"), verbose=T, overwrite=T)
+```
+
+```{r}
+blocks = read_sf(file.path(DATA_PATH, "data", "population.gpkg"))
+jobs = read_csv(file.path(DATA_PATH, "data", "nc_wac_S000_JT00_2023.csv.gz"), col_types=cols(w_geocode=col_character()))
+```
+
+```{r}
+blocks = blocks |>
+    # Confirmed same vintage
+    left_join(jobs, by=c("GEOID"="w_geocode")) |>
+    mutate(C000=replace_na(C000, 0)) |>
+    rename(id="GEOID")
+```
+
+```{r}
+points = st_centroid(blocks) |> st_transform(4326)
+```
+
+## Isochrones
+
+```{r}
+ccc_loc = tribble(
+    ~id, ~lat, ~lon,
+    "ccc", 35.84902195931683, -78.68986806959735
+) |>
+    st_as_sf(coords=c("lon", "lat"), crs=4326)
+```
+
+```{r}
+stop_loc = tribble(
+    ~id, ~lat, ~lon,
+    "stop", 35.84928198551052, -78.6929919388889
+) |>
+    st_as_sf(coords=c("lon", "lat"), crs=4326)
+```
+
+### Walk
+
+```{r}
+walk_base_iso = isochrone(
+    base,
+    base,
+    stop_loc,
+    mode = "WALK",
+    cutoffs=c(20),
+    departure_datetime=as.POSIXct("2025-07-17 07:00:00"),
+    zoom=11
+)
+```
+
+```{r}
+walk_ccc_iso = isochrone(
+    ccc,
+    ccc,
+    stop_loc,
+    mode = "WALK",
+    cutoffs=c(20),
+    departure_datetime=as.POSIXct("2025-07-17 07:00:00"),
+    zoom=11
+)
+```
+
+```{r}
+walk_isos = rbind(
+    mutate(walk_base_iso, scenario="Baseline"),
+    mutate(walk_ccc_iso, scenario="With link")
+)
+
+```
+
+```{r}
+links = read_sf(file.path(DATA_PATH, "data", "links.gpkg"))
+
+st_crs(links) = 32119
+
+ccc_link = links |>
+    filter(
+        fr_edge_src == "VertexID(1431908213, :node)" &
+        to_edge_tgt == "VertexID(6110164332, :node)" &
+        str_detect(to_edge_src, ":split"))
+```
+
+```{r}
+network = st_read(file.path(DATA_PATH, "data", "graph_orig.gpkg"))
+
+local_network = network |>
+    filter(lengths(st_intersects(geom, st_buffer(st_transform(ccc_loc, 32119), 1500))) > 0)
+```
+
+```{r}
+stops = st_read(file.path(DATA_PATH, "data", "stops.gpkg"))
+```
+
+```{r}
+walk_iso_map = tm_basemap(server="Esri.WorldImagery", alpha=0.5) +
+    tm_shape(walk_isos) +
+    tm_polygons(
+        fill="scenario",
+        fill_alpha=0.25,
+        fill.scale = tm_scale(values=rev(ggunc:::unc_pal()(2))),
+        fill.legend=tm_legend(show=T, title="Catchment area", position=tm_pos_out("right", "center"), bg.color="gray")
+        ) +
+        tm_scalebar() +
+    tm_shape(mutate(local_network, label="Existing network")) +
+        tm_lines(
+            col="label",
+            lwd=1,
+            col.scale = tm_scale(values=c("white")),
+            col.legend=tm_legend(show=T, title="", position=tm_pos_out("right", "center"))
+            ) +
+    tm_shape(mutate(ccc_link, label="New link")) +
+        tm_lines(lwd=6, col="label", col.scale = tm_scale(values=c("orange")), col.legend=tm_legend(show=T, title="", position=tm_pos_out("right", "center"))
+            ) +
+    tm_shape(mutate(stops, label="Other bus stops")) +
+        tm_dots(fill="label", size=0.5, fill.scale = tm_scale(values=c("pink")), fill.legend=tm_legend(show=T, title="", position=tm_pos_out("right", "center"))) +
+    tm_shape(mutate(stop_loc, label="Stop")) +
+        tm_dots(fill="label", size=0.75, fill.scale = tm_scale(values=c("red")), fill.legend=tm_legend(show=T, title="", position=tm_pos_out("right", "center"))
+            )
+
+walk_iso_map
+```
+
+### Transit
+```{r}
+base_iso = isochrone(
+    base,
+    base,
+    ccc_loc,
+    mode = "TRANSIT",
+    time_window=120L,
+    cutoffs=c(60),
+    departure_datetime=as.POSIXct("2025-07-17 07:00:00"),
+    zoom=11
+)
+```
+
+```{r}
+ccc_iso = isochrone(
+    ccc,
+    ccc,
+    ccc_loc,
+    mode = "TRANSIT",
+    time_window=120L,
+    cutoffs=c(60),
+    departure_datetime=as.POSIXct("2025-07-17 07:00:00"),
+    zoom=11
+)
+```
+
+```{r}
+isos = rbind(
+    mutate(base_iso, scenario="Baseline"),
+    mutate(ccc_iso, scenario="With link")
+)
+
+```
+
+```{r}
+tr_iso_map = tm_basemap(server=paste0("https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/512/{z}/{x}/{y}@2x?fmt=.png&access_token=", Sys.getenv("MAPBOX_API_KEY"))) +
+    tm_shape(isos) +
+    tm_polygons(
+        fill="scenario",
+        fill_alpha=0.5,
+        fill.scale = tm_scale(values=rev(ggunc:::unc_pal()(2))),
+        fill.legend=tm_legend(show=T, title="Scenario", position=tm_pos_in("right", "top"), bg.color="gray")
+        ) +
+        tm_scalebar() +
+    tm_shape(mutate(ccc_loc, label="Origin")) +
+        tm_dots(fill="label", size=1, fill.scale=tm_scale(values=c("red")), fill.legend=tm_legend(show=T, title="", position=tm_pos_in("right", "top")))
+
+tr_iso_map
+```
+
+
+```{r}
+single_link_map = tmap_arrange(walk_iso_map + tm_credits("Basemaps © OpenStreetMap contributors, Esri, Mapbox", position=tm_pos_out("center", "bottom")), tr_iso_map)
+single_link_map
+
+tmap_save(single_link_map, here::here("paper/figures/single_link.png"), width=8, height=4, bg="white")
+```
+
+## Accessibility
+
+```{r}
+acc_base = accessibility(
+    base,
+    base,
+    points,
+    points,
+    opportunities_colnames = "C000",
+    mode = "TRANSIT",
+    time_window=120L,
+    cutoffs=c(60),
+    departure_datetime=as.POSIXct("2025-07-17 07:00:00"),
+    progress=T
+)
+```
+
+```{r}
+acc_scenario = accessibility(
+    scenario,
+    scenario,
+    points,
+    points,
+    opportunities_colnames = "C000",
+    mode = "TRANSIT",
+    time_window=120L,
+    cutoffs=c(60),
+    departure_datetime=as.POSIXct("2025-07-17 07:00:00"),
+    progress=T
+)
+```
+
+```{r}
+block_acc = blocks |>
+    left_join(select(acc_base, id, acc_base=accessibility), by="id") |>
+    left_join(select(acc_scenario, id, acc_scenario=accessibility), by="id") |>
+    mutate(acc_inc = acc_scenario - acc_base)
+```
+
+```{r}
+# -1e-6 because some that are 0 are actually very slightly below
+# due to precision issues
+stopifnot(all(block_acc$acc_inc > -1e-6))
+
+# This is actually not the case due to rounding, and it's incredibly confusing. One example is 370630015042006.
+# This one has a link added nearby that actually isn't used to access many destinations, but it does affect the
+# length of the link that gets split. Internally R5 holds distances in integer mm. Before it was 79352 mm, and
+# after it gets split into 42289 mm and 37062 mm. It then converts those to seconds by divifing by 1000.0 and by
+# the walking speed, which confusingly defaults to 1.0 m/s in R5R vs 1.3 m/s in R5. Then in SingleModeTraversalTimes
+# the travel time on each edge is calculated and then ceilinged to integer seconds
+# ceil(37.062) + ceil(42.289) = 81 seconds
+# ceil(79.352) = 80 seconds
+# That must be just enough to miss a bus at one particular sample minute, moving the median one minute higher in a bunch of places.
+```
+
+```{r}
+tm_basemap(server=paste0("https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/512/{z}/{x}/{y}@2x?fmt=.png&access_token=", Sys.getenv("MAPBOX_API_KEY"))) +
+    tm_shape(isos) + # just to get the scale right
+    tm_shape(filter(block_acc, acc_inc > 0)) +
+    tm_polygons(fill="acc_inc", fill_alpha=0.75, col_alpha=0) +
+    tm_scalebar()
+```
+
+```{r}
+write_sf(block_acc, file.path(DATA_PATH, "data", "acc_change.gpkg"))
+write_sf(r5r::street_network_to_sf(base)$edges, file.path(DATA_PATH, "data", "base_net_r5.gpkg"))
+write_sf(r5r::street_network_to_sf(scenario)$edges, file.path(DATA_PATH, "data", "scenario_net_r5.gpkg"))
+
+```
+
+```{r}
+problem_pts = st_transform(st_centroid(block_acc[block_acc$acc_inc < -1e-6,]), 4326)
+
+problem_base_iso = isochrone(
+    base,
+    base,
+    problem_pts,
+    mode = "WALK",
+    time_window=120L,
+    cutoffs=c(18),
+    departure_datetime=as.POSIXct("2025-07-17 07:00:00"),
+    zoom=11
+) |> mutate(scenario="Base")
+
+problem_scen_iso = isochrone(
+    scenario,
+    scenario,
+    problem_pts,
+    mode = "WALK",
+    time_window=120L,
+    cutoffs=c(18),
+    departure_datetime=as.POSIXct("2025-07-17 07:00:00"),
+    zoom=11
+) |>
+    mutate(scenario="Scenario")
+````
+
+```{r}
+rbind(problem_base_iso, problem_scen_iso) |>
+    write_sf(file.path(DATA_PATH, "data", "problem_isos.gpkg"))
+```
+
+```{r}
+v = street_network_to_sf(base)$vertices
+v$id = v$index
+
+problem_tt_base = travel_time_matrix(
+    base,
+    base,
+    problem_pts,
+    v,
+    mode = "TRANSIT",
+    time_window=120L,
+    departure_datetime=as.POSIXct("2025-07-17 07:00:00")
+)
+
+problem_tt_scen = travel_time_matrix(
+    scenario,
+    scenario,
+    problem_pts,
+    v,
+    mode = "TRANSIT",
+    time_window=120L,
+    departure_datetime=as.POSIXct("2025-07-17 07:00:00")
+)
+```
+
+```{r}
+
+problem_tt = problem_tt_base[problem_tt_scen[,.(from_id, to_id, travel_time_p50_scen=travel_time_p50)], on=c("from_id", "to_id")]
+
+problem_tt_sf = problem_tt |>
+    left_join(mutate(v, id=as.character(id)), by=c("to_id"="id"))
+
+problem_tt_sf |>
+    write_sf(file.path(DATA_PATH, "data", "travel_time_problems.gpkg"))
+```
