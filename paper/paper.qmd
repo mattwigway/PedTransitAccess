@@ -171,7 +171,7 @@ An intermediate step is to measure access to routes rather than stops. Currently
 
 # Data and code availability
 
-All data used in this article are publicly available. Code is available at <> (anonymized link; will be changed after review).
+All data used in this article are publicly available. Code is available at <https://bespoke-tapioca-42af41.netlify.app/repo/> (anonymized link; will be changed after review).
 
 # Declaration on use of generative AI
 
