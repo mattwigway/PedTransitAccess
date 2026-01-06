@@ -2,7 +2,7 @@
 
 julia_version = "1.12.3"
 manifest_format = "2.0"
-project_hash = "d9f71c43333ddcf886285d93a94f7798972300f5"
+project_hash = "1c4e53dc0751436761cbb98155ad743e99e4cd14"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -608,8 +608,10 @@ uuid = "d604d12d-fa86-5845-992e-78dc15976526"
 version = "3.14.1+0"
 
 [[deps.GTFS]]
-deps = ["ArgParse", "CSV", "Compat", "DataFrames", "DataFramesMeta", "DataStructures", "Dates", "Geodesy", "Missings", "ProtoBuf", "ShiftedArrays", "ZipFile"]
-path = "/Users/mwbc/.julia/dev/GTFS"
+deps = ["ArgParse", "CSV", "Compat", "DataFrames", "DataFramesMeta", "DataStructures", "Dates", "Geodesy", "Missings", "ShiftedArrays", "ZipFile"]
+git-tree-sha1 = "234150efd84c5974325cefb621aa9c41884c106b"
+repo-rev = "main"
+repo-url = "https://github.com/mattwigway/GTFS.jl"
 uuid = "55d01638-f41f-4520-a957-9ff9a0ad12ca"
 version = "1.0.0-DEV"
 
@@ -1150,7 +1152,9 @@ version = "10.1.4+3"
 
 [[deps.MissingLinks]]
 deps = ["ArchGDAL", "ArgParse", "Artifacts", "CSV", "Cairo", "Compat", "DataFrames", "DataFramesMeta", "DataStructures", "Dates", "DimensionalData", "EzXML", "Fontconfig", "GDAL", "Gadfly", "GeoDataFrames", "GeoFormatTypes", "GeoInterface", "Graphs", "Humanize", "LibGEOS", "LibSpatialIndex", "LinearAlgebra", "Logging", "MetaGraphsNext", "Mmap", "OpenStreetMapPBF", "OverflowContexts", "Pkg", "ProgressMeter", "Rasters", "StatsBase", "ThreadsX"]
-path = "/Users/mwbc/.julia/dev/MissingLinks"
+git-tree-sha1 = "3aa72fdf1f63dc2c9c58641602002b78b55df17f"
+repo-rev = "ped-transit-access"
+repo-url = "https://github.com/mattwigway/MissingLinks.jl"
 uuid = "472ee5c9-fceb-493a-8c64-09683b8345c2"
 version = "0.2.1"
 
@@ -1234,9 +1238,9 @@ version = "0.5.6+0"
 
 [[deps.OpenStreetMapPBF]]
 deps = ["ArgParse", "CodecZlib", "Logging", "Mmap", "ProtoBuf", "StructEquality"]
-path = "/Users/mwbc/.julia/dev/OpenStreetMapPBF"
+git-tree-sha1 = "7e117b818590a658770b534760df7259a33d4432"
 uuid = "32359c53-f983-4442-b913-a1664815e12e"
-version = "0.2.0"
+version = "0.3.0"
 
 [[deps.OrderedCollections]]
 git-tree-sha1 = "05868e21324cede2207c6f0f466b4bfef6d5e7ee"
