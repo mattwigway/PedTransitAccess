@@ -210,7 +210,7 @@ ccc = collect(filter(l -> l.fr_edge_src == VertexID(1431908213, :node) && l.to_e
 create_pbfs(
     joinpath(DATA_PATH, "data", "triangle.osm.pbf"),
     nothing,
-    joinpath(DATA_PATH, "data", "triangle-ccc.osm.pbf"),
+    joinpath(DATA_PATH, "networks", "ccc", "triangle-ccc.osm.pbf"),
     ccc,
     G
 )
