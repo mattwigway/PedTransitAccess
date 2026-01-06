@@ -1,7 +1,8 @@
 ---
-title: Expanding Transit Access Through Street Network Investments
+title: Expanding Access via Transit Through Street Network Investments
 format:
-  pdf:
+  wordcount-pdf:
+    number-sections: true
     include-in-header: 
       text: |
         \usepackage{placeins}
@@ -167,6 +168,14 @@ While this research does evaluate job accessibility via transit, idenfication of
 One of the key algorithmic innovations that makes Bhagat-Conway et al.'s [-@bhagat-conway_close_2025] algorithm tractable is that it directly evaluates the difference in accessibility for each link, without needing to re-calculate accessibility estimates for the whole network. This requires that link costs not change over time–saving 5 minutes (or 500m walking) has the same effect on the trip regardless of where it was saved. This is not true for transit; a path that saved 5 minutes of walking time might save an hour overall if it let you get on an earlier bus.
 
 An intermediate step is to measure access to routes rather than stops. Currently, the Missing Links algorithm works with undirected graphs, which is generally an appropriate way to model pedestrian networks. One-way pathways for pedestrians are rare. If the algorithm were extended to work on directed graphs, a zero-length edge could be added from every stop along a route to a node that represented the route itself, and those nodes could be considered destinations. Thus, paths that connect people to additional stops on the same routes would not score highly. This requires an algorithm implementation with a directed graph because the edges connecting to the route nodes must all go _to_ the route node, rather than _from_ it. Otherwise, the route nodes could be used as "shortcuts" to allow people to teleport to any location along the route from any stop [cf. @humagain_would_2020].
+
+# Data and code availability
+
+All data used in this article are publicly available. Code is available at <> (anonymized link; will be changed after review).
+
+# Declaration on use of generative AI
+
+Google AI summaries were reviewed when searching for examples of solutions to code issues encountered. No code was copied from Google AI. No other AI tools were used.
 
 # References
 
