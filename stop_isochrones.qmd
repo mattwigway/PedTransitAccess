@@ -1,6 +1,5 @@
 ```{r}
-# note: currently using a custom build of R5, https://github.com/mattwigway/r5/tree/configurable-linking-distance
-# PR opened: https://github.com/conveyal/r5/pull/974
+# note: currently using a custom build of R5
 options(java.parameters="-Xmx4G", r5r.r5jar="../r5/build/libs/r5-v7.5-7-g996dd94-all.jar")
 #library(r5r)
 devtools::load_all("../r5r/r-package")
