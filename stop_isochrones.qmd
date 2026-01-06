@@ -64,7 +64,8 @@ tm_shape(isos) +
         tm_basemap(server=paste0("https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/512/{z}/{x}/{y}@2x?fmt=.png&access_token=", Sys.getenv("MAPBOX_API_KEY"))) +
         tm_facets_wrap(by="loc") +
     tm_scalebar(position=tm_pos_out("center", "bottom")) +
-    tm_credits("Basemap © OpenStreetMap contributors, Mapbox", position=tm_pos_out("center", "bottom"))
+    tm_credits("Basemap © OpenStreetMap contributors, Mapbox", position=tm_pos_out("center", "bottom")) +
+    tm_logo(here::here("paper/figures/mapbox-logo-black.png"), height=1.5, position=tm_pos_in("LEFT", "BOTTOM"), margin=0.5)
 
 tmap_save(map, here::here("paper/figures/catchement.png"), width=8, height=4)
 ```
