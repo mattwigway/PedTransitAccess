@@ -6,13 +6,24 @@ format:
     include-in-header: 
       text: |
         \usepackage{placeins}
+author:
+  - name: Matthew Wigginton Bhagat-Conway
+    affiliations:
+      - name: University of North Carolina at Chapel Hill
+        department: Department of City and Regional Planning
+        address: "223 E Cameron Ave, CB #3140"
+        city: Chapel Hill
+        state: NC
+        country: USA
+        postal-code: 27599
+    orcid: 0000-0002-1210-2982
+    email: mwbc@unc.edu
 abstract: |
   Evaluating changes to transit service using accessibility metrics is increasingly common. However, these metrics are almost always used to evaluate changes to the transit service itself. Almost every transit user is also a pedestrian at some point when accessing or egressing from a stop. In this article, I apply an automated algorithm to identify locations in the pedestrian network where adding an additional link would improve transit accessibility. I then evaluate these locations in terms of their impact on accessibility to jobs via transit, combining both the pedestrian network and the transit service to evaluate the real-world impact of these changes.
 
   Improving accessibility via transit through street network improvements is an attractive proposition, because unlike service improvements street network improvements have minimal ongoing costs. Furthermore, many pedestrian network improvements (e.g. crosswalks or sidewalks) are relatively low cost compared to capital investment in transit service.
 keywords: [last-mile, transit, pedestrian environment]
 bibliography: bibliography.bib
-date: 2025-08-01
 execute:
   include: false
   output: false
@@ -171,7 +182,7 @@ An intermediate step is to measure access to routes rather than stops. Currently
 
 # Data and code availability
 
-All data used in this article are publicly available. Code is available at <https://bespoke-tapioca-42af41.netlify.app/repo/> (anonymized link; will be changed after review).
+All data used in this article are publicly available. Code is available at <https://github.com/mattwigway/PedTransitAccess>.
 
 # Declaration on use of generative AI
 
