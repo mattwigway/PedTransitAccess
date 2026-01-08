@@ -143,6 +143,37 @@ walk_iso_map = tm_basemap(server="Esri.WorldImagery", alpha=0.5) +
 walk_iso_map
 ```
 
+```{r}
+# save widescreen version for presentation
+walk_iso_map_wide = tm_basemap(server="Esri.WorldImagery", alpha=0.5) +
+    tm_shape(walk_isos, relative=T, width=2, height=1) +
+    tm_polygons(
+        fill="scenario",
+        fill_alpha=0.25,
+        fill.scale = tm_scale(values=rev(ggunc:::unc_pal()(2))),
+        fill.legend=tm_legend(show=T, title="Catchment area", position=tm_pos_out("right", "center"), bg.color="gray")
+        ) +
+        tm_scalebar() +
+    tm_shape(mutate(local_network, label="Existing network")) +
+        tm_lines(
+            col="label",
+            lwd=1,
+            col.scale = tm_scale(values=c("white")),
+            col.legend=tm_legend(show=T, title="", position=tm_pos_out("right", "center"))
+            ) +
+    tm_shape(mutate(ccc_link, label="New link")) +
+        tm_lines(lwd=6, col="label", col.scale = tm_scale(values=c("orange")), col.legend=tm_legend(show=T, title="", position=tm_pos_out("right", "center"))
+            ) +
+    tm_shape(mutate(stops, label="Other bus stops")) +
+        tm_dots(fill="label", size=0.5, fill.scale = tm_scale(values=c("pink")), fill.legend=tm_legend(show=T, title="", position=tm_pos_out("right", "center"))) +
+    tm_shape(mutate(stop_loc, label="Stop")) +
+        tm_dots(fill="label", size=0.75, fill.scale = tm_scale(values=c("red")), fill.legend=tm_legend(show=T, title="", position=tm_pos_out("right", "center"))
+            ) +
+    tm_credits("Data © OpenStreetMap contributors, Esri, Mapbox, NC CGIA, Microsoft, Vantor")
+
+tmap_save(walk_iso_map_wide, here::here("paper/figures/single_link_walk.png"), width=8, height=4, bg="white")
+```
+
 ### Transit
 ```{r}
 base_iso = isochrone(
@@ -191,8 +222,25 @@ tr_iso_map = tm_basemap(server=paste0("https://api.mapbox.com/styles/v1/mapbox/s
     tm_shape(mutate(ccc_loc, label="Origin")) +
         tm_dots(fill="label", size=1, fill.scale=tm_scale(values=c("red")), fill.legend=tm_legend(show=T, title="", position=tm_pos_in("right", "top"))) +
     tm_logo(here::here("paper/figures/mapbox-logo-black.png"), height=1.5, position=tm_pos_in("LEFT", "BOTTOM"), margin=0.5)
+```
 
-tr_iso_map
+```{r}
+tr_iso_map_wide = tm_basemap(server=paste0("https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/512/{z}/{x}/{y}@2x?fmt=.png&access_token=", Sys.getenv("MAPBOX_API_KEY"))) +
+    tm_shape(isos, relative=T, width=2, height=1) +
+    tm_polygons(
+        fill="scenario",
+        fill_alpha=0.5,
+        fill.scale = tm_scale(values=rev(ggunc:::unc_pal()(2))),
+        fill.legend=tm_legend(show=T, title="Scenario", position=tm_pos_in("right", "top"), bg.color="gray")
+        ) +
+        tm_scalebar() +
+    tm_shape(mutate(ccc_loc, label="Origin")) +
+        tm_dots(fill="label", size=1, fill.scale=tm_scale(values=c("red")), fill.legend=tm_legend(show=T, title="", position=tm_pos_in("right", "top"))) +
+    tm_logo(here::here("paper/figures/mapbox-logo-black.png"), height=1.5, position=tm_pos_in("LEFT", "BOTTOM"), margin=0.5) +
+        tm_credits("Map data © OpenStreetMap contributors, Mapbox")
+
+
+tmap_save(tr_iso_map_wide, here::here("paper/figures/single_link_transit.png"), width=12, height=6, bg="white")
 ```
 
 
@@ -203,7 +251,46 @@ single_link_map
 tmap_save(single_link_map, here::here("paper/figures/single_link.png"), width=8, height=4, bg="white")
 ```
 
+## Single versions for presentation
+
+```{r}
+```
+
 ## Accessibility
+
+### CCC
+
+```{r}
+acc_ccc_base = accessibility(
+    base,
+    base,
+    ccc_loc,
+    points,
+    opportunities_colnames = "C000",
+    mode = "TRANSIT",
+    time_window=120L,
+    cutoffs=c(60),
+    departure_datetime=as.POSIXct("2025-07-17 07:00:00"),
+    progress=T
+)
+```
+
+```{r}
+acc_ccc_ccc = accessibility(
+    ccc,
+    ccc,
+    ccc_loc,
+    points,
+    opportunities_colnames = "C000",
+    mode = "TRANSIT",
+    time_window=120L,
+    cutoffs=c(60),
+    departure_datetime=as.POSIXct("2025-07-17 07:00:00"),
+    progress=T
+)
+```
+
+### Regional
 
 ```{r}
 acc_base = accessibility(
@@ -268,7 +355,7 @@ acc_map = tm_basemap(server=paste0("https://api.mapbox.com/styles/v1/mapbox/stre
     tm_credits("Basemap © OpenStreetMap contributors, Mapbox") +
     tm_logo(here::here("paper/figures/mapbox-logo-black.png"), height=1.5, position=tm_pos_in("LEFT", "BOTTOM"), margin=0.5)
 
-tmap_save(acc_map, here::here("paper", "figures", "regional.png"), width=8, height=7, bg="white")
+tmap_save(acc_map, here::here("paper", "figures", "regional.png"), width=12, height=8, bg="white")
 ```
 
 ```{r}
