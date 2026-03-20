@@ -51,3 +51,10 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+# Quarto
+*.html
+*.pdf
+*_files
+.quarto
+.vscode
