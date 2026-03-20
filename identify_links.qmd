@@ -75,7 +75,7 @@ end
 
 ```{julia}
 all_stops = vcat(
-    stop_counts(cht, Date(2024, 10, 4)), # A Thursday when the feed is valid
+    stop_counts(cht, Date(2025, 7, 17)), # A Thursday when the feed is valid
     stop_counts(gotriangle, Date(2025, 7, 17)),
     stop_counts(godurham, Date(2025, 7, 17)),
     stop_counts(gocary, Date(2025, 7, 17)),
@@ -214,4 +214,9 @@ create_pbfs(
     ccc,
     G
 )
+```
+
+
+```{julia}
+
 ```
