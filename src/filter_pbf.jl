@@ -14,9 +14,8 @@ function create_pbfs(input, baseout, scenout, links, G)
     ways = Way[]
 
     # no need to parse relations for pedestrians
-    settings = TraversalPermissionSettings()
     scan_ways(input) do way
-        if is_traversable(settings, way)
+        if is_traversable(MissingLinks.DEFAULT_TRAVERSAL_SETTINGS, way)
             push!(ways, way)
             push!.(Ref(nodeids), way.nodes)
         end
