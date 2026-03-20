@@ -131,13 +131,13 @@ walk_iso_map = tm_basemap(server="Esri.WorldImagery", alpha=0.5) +
             col.scale = tm_scale(values=c("white")),
             col.legend=tm_legend(show=T, title="", position=tm_pos_out("right", "center"))
             ) +
-    tm_shape(mutate(ccc_link, label="New link")) +
-        tm_lines(lwd=6, col="label", col.scale = tm_scale(values=c("orange")), col.legend=tm_legend(show=T, title="", position=tm_pos_out("right", "center"))
-            ) +
     tm_shape(mutate(stops, label="Other bus stops")) +
         tm_dots(fill="label", size=0.5, fill.scale = tm_scale(values=c("pink")), fill.legend=tm_legend(show=T, title="", position=tm_pos_out("right", "center"))) +
     tm_shape(mutate(stop_loc, label="Stop")) +
         tm_dots(fill="label", size=0.75, fill.scale = tm_scale(values=c("red")), fill.legend=tm_legend(show=T, title="", position=tm_pos_out("right", "center"))
+            ) +
+    tm_shape(mutate(ccc_link, label="New link")) +
+        tm_lines(lwd=3, col="label", col.scale = tm_scale(values=c("orange")), col.legend=tm_legend(show=T, title="", position=tm_pos_out("right", "center"))
             )
 
 walk_iso_map
@@ -346,16 +346,50 @@ block_acc = blocks |>
 ```
 
 ```{r}
-acc_map = tm_basemap(server=paste0("https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/512/{z}/{x}/{y}@2x?fmt=.png&access_token=", Sys.getenv("MAPBOX_API_KEY"))) +
-    tm_shape(filter(block_acc, acc_inc > 0)) +
-    tm_polygons(fill="acc_inc", fill.scale=tm_scale_intervals(style="fixed", breaks=c(1, 500, 1000, 5000, 10000, 105000)), fill_alpha=0.75, col_alpha=0, tm_legend(title="Increase in Job Access", position=tm_pos_in("right", "top"))) +
-    tm_shape(filter(links, rank <= 100) |> mutate(label="New links")) +
-    tm_dots(fill="label", fill.scale=tm_scale(values=c("red")), fill.legend=tm_legend(title="", position=tm_pos_in("right", "top"))) +
-    tm_scalebar() +
-    tm_credits("Basemap © OpenStreetMap contributors, Mapbox") +
-    tm_logo(here::here("paper/figures/mapbox-logo-black.png"), height=1.5, position=tm_pos_in("LEFT", "BOTTOM"), margin=0.5)
+acc_map = tm_basemap(
+  server = paste0(
+    "https://api.mapbox.com/styles/v1/mapbox/light-v11/tiles/512/{z}/{x}/{y}@2x?fmt=.png&access_token=",
+    Sys.getenv("MAPBOX_API_KEY")
+  )
+) +
+  tm_shape(filter(block_acc, acc_inc > 0)) +
+  tm_polygons(
+    fill = "acc_inc",
+    fill.scale = tm_scale_intervals(
+      style = "fixed",
+      breaks = c(1, 500, 1000, 5000, 10000, 105000),
+      # drop the lightest colors for legibility
+      values = rev(viridis::mako(8)[1:6])
+    ),
+    fill_alpha = 0.75,
+    col_alpha = 0,
+    tm_legend(
+      title = "Increase in Job Access",
+      position = tm_pos_in("right", "top")
+    )
+  ) +
+  tm_shape(filter(links, rank <= 100) |> mutate(label = "New links")) +
+  tm_dots(
+    fill = "label",
+    fill.scale = tm_scale(values = c("red")),
+    fill.legend = tm_legend(title = "", position = tm_pos_in("right", "top"))
+  ) +
+  tm_scalebar() +
+  tm_credits("Basemap © OpenStreetMap contributors, Mapbox") +
+  tm_logo(
+    here::here("paper/figures/mapbox-logo-black.png"),
+    height = 1.5,
+    position = tm_pos_in("LEFT", "BOTTOM"),
+    margin = 0.5
+  )
 
-tmap_save(acc_map, here::here("paper", "figures", "regional.png"), width=12, height=8, bg="white")
+tmap_save(
+  acc_map,
+  here::here("paper", "figures", "regional.png"),
+  width = 12,
+  height = 8,
+  bg = "white"
+)
 ```
 
 ```{r}
@@ -363,4 +397,6 @@ write_sf(block_acc, file.path(DATA_PATH, "data", "acc_change.gpkg"))
 write_sf(r5r::street_network_to_sf(base)$edges, file.path(DATA_PATH, "data", "base_net_r5.gpkg"))
 write_sf(r5r::street_network_to_sf(scenario)$edges, file.path(DATA_PATH, "data", "scenario_net_r5.gpkg"))
 
+```
+```{r}
 ```

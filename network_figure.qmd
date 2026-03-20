@@ -33,7 +33,7 @@ local_network = network |>
 netmap = tm_basemap(server="Esri.WorldImagery") +
     tm_shape(st_buffer(loc, 500)) +
     tm_shape(local_network) +
-    tm_lines(col="yellow", lwd=3) +
+    tm_lines(col="#88ddaa", lwd=3) +
     tm_scalebar() +
     tm_credits("Data © Esri, NC CGIA, Vantor, OpenStreetMap", position=tm_pos_out("center", "bottom"))
 
