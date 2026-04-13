@@ -126,6 +126,8 @@ function insert_links!(G, ways, nodes, links)
             # no need to check fr_edge_tgt - island nodes are always connected to other island nodes    
             # find the closest way. It is possible this will not be the right way if the link connects at an intersection,
             # but topologically that's okay - it will just connect to the intersection which is connected to the right way.
+
+            # TODO why aren't we using the way ID from the graph here?
             start_way, start_way_dist = find_closest(idx, start, ways, nodes)
             @assert start_way_dist .< 1e-6 # should be basically on the way
 
