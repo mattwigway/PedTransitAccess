@@ -54,7 +54,7 @@ Much post-war development in the United States is characterized by disconnected 
 
 ![Catchment areas of two bus stops in Raleigh, North Carolina, USA](figures/catchement.png){#fig-catchment fig-alt="Maps showing reachable areas on foot around two bus stops in Raleigh, NC. On the left is a stop downtown, while on the right is a stop in the northern suburbs. A 1.2 km crow-flies buffer around each stop is shown. The area actually reachable using the pedestrian network is shaded. Downtown Raleigh has an extensive gridded pedestrian network, so the reachable area is similar in extent to the crow-flies buffer. In the suburbs, the pedestrian network is more disconnected, so the reachable area is significantly smaller than the buffer."}
 
-This vast difference in catchment areas between these two stops suggests that targeted investments in the street network could improve transit access without ongoing increases in operational costs, by enabling the existing transit service to connect to more people and places. @bhagat-conway_close_2025 introduced an algorithm to identify "low-hanging fruit" missing links in the pedestrian network. Specifically, this "Missing Links" algorithm identifies locations on the street network that are close together geographically, but far apart in network distance. It then scores those links based on their contribution to access. In this article, I apply and extend this algorithm to identify potential links that could improve access to public transit stops, and then evaluate the most-highly-ranked links using a traditional access metric generally applied to transit service changes. I apply the extended algorithm to the Research Triangle region (Raleigh/Durham) of North Carolina, USA, to identify locations where additions to the pedestrian network could increase transit access.
+This vast difference in catchment areas between these two stops suggests that targeted investments in the street network could improve transit access without ongoing increases in operational costs, by enabling the existing transit service to connect to more people and places. @bhagat-conway_close_2025 introduced an algorithm to identify "low-hanging fruit" missing links in the pedestrian network. Specifically, this "Missing Links" algorithm identifies locations on the street network that are close together geographically, but far apart in network distance. It then scores those links based on their contribution to access. In this article, I apply this algorithm to identify potential links that could improve access to public transit stops, and then evaluate the most-highly-ranked links using a traditional access metric generally applied to transit service changes. I use the street and transit network of the Research Triangle region (Raleigh/Durham) of North Carolina, USA, to identify locations where additions to the pedestrian network could increase transit access.
 
 # Literature review
 
@@ -76,21 +76,35 @@ Even with perfect network data, it is still necessary to determine what streets 
 
 I source pedestrian network data from OpenStreetMap. Most OpenStreetMap-based routing engines take a fairly lenient approach in terms of pedestrian path generation: they allow walking on any road where pedestrians are assumed to be legally allowed (i.e. most roads, excepting freeways/motorways and those explicitly tagged as not allowing pedestrians).
 
-Since this work focuses on improvements to the pedestrian network, I want to use a network of links where pedestrians are likely to feel comfortable walking, rather than all places they are legally allowed to walk. To approximate this network, I filter the OpenStreetMap data to only ways that have a highway type of
+Since this work focuses on improvements to the pedestrian network, I want to use a network of links where pedestrians are likely to feel comfortable walking, rather than all places they are legally allowed to walk. Specifically, I use a network composed of off-street facilities, sidewalks, and minor roads.
 
-- footway,
-- cycleway,
-- pedestrian,
-- track,
-- sidewalk,
-- service,
-- road,
-- steps,
-- path,
-- crossing, or
-- residential,
+ To approximate this network, I filter the OpenStreetMap data to only the following OpenStreetMap tags:
 
-as well as those that are tagged as having sidewalks or are explicitly tagged as allowing pedestrians. This leads to a somewhat disconnected network in suburban areas. This disconnected network is a better representation of the lived experience of pedestrians in suburban areas of the Research Triangle. Unlike Bhagat-Conway et al. [-@bhagat-conway_close_2025], I do not remove "islands" with very few vertices. Many of these islands are residential streets connected only to a large arterial and thus are representative of the fragmented nature of the network. A representative portion of the network is shown in @fig-network (this and all other maps are created using the R `{tmap}` package [@tmap]). Unlike @bhagat-conway_close_2025, I do not break long edges into shorter pieces, as this complicates inserting identified links back into the OpenStreetMap data for further analysis.
+- Facilities explicitly designated for pedestrians
+  - `pedestrian=yes`
+  - `pedestrian=designated`
+- Off-street facilities
+  - `highway=footway`,
+  - `highway=cycleway`,
+  - `highway=pedestrian`,
+  - `highway=track`,
+  - `highway=steps`,
+  - `highway=path`,
+  - `highway=crossing`,
+- Sidewalks
+  - `highway=sidewalk`,
+  - `sidewalk=yes`
+  - `sidewalk=left`
+  - `sidewalk=right`
+  - `sidewalk=both`
+  - `sidewalk:left=yes`
+  - `sidewalk:right=yes`
+  - `sidewalk:both=yes`
+- Quiet streets that are likely safe without designated infrastructure
+  - `highway=service`
+  - `highway=residential`
+
+and I exclude anything explictly tagged as disallowing pedestrians or public access generally. This leads to a somewhat disconnected network in suburban areas. This disconnected network is a better representation of the lived experience of pedestrians in suburban areas of the Research Triangle. Unlike Bhagat-Conway et al. [-@bhagat-conway_close_2025], I do not remove "islands" with very few vertices. Many of these islands are residential streets connected only to a large arterial and thus are representative of the fragmented nature of the network. A representative portion of the network is shown in @fig-network (this and all other maps are created using the R `{tmap}` package [@tmap]). Unlike @bhagat-conway_close_2025, I do not break long edges into shorter pieces, as this complicates inserting identified links back into the OpenStreetMap data for further analysis.
 
 ![A portion of the network in southwest Durham, North Carolina. The walkable streets included in the network are shown in light green.](figures/network.png){#fig-network fig-alt="A suburban street network, with sidewalks and minor street shown in light green. Major streets are not walkable and thus are not highlighted, creating a disconnected network."}
 
@@ -100,7 +114,15 @@ One limitation of this approach is handling crossings, which were a significant 
 
 The accessibility algorithm requires that all origins and destinations be associated with a node, so I insert all bus stops in the region into the network. If they are near an existing node, I assign the stop to that node. If they are within 20 meters of an existing edge, but not near an existing node, I insert a node into that nearby edge. Lastly, if they are not near any edges (e.g. stops that are on streets without sidewalks), I add two nearly-coincident nodes, and a "phantom" edge between them. The algorithm only identifies missing links between edges, so this phantom edge allows the algorithm to connect these stops to the network. Transit stop and schedule data are sourced from GTFS data from the five major transit operators in the region: GoDurham, GoRaleigh, GoTriangle, GoCary, and Chapel Hill Transit.
 
-I then apply the Missing Links algorithm to this network, identifying locations where there are points on the network that are within 100 meters geographically and at least 500 meters apart on the network. This process identifies hundreds of thousands of potential links in the region, though many provide effectively the same access. I use the deduplication method described in @bhagat-conway_close_2025 to reduce this to a more manageable amount. Link identification and deduplication used version 0.2.3 of the Missing Links tool.
+I then apply the Missing Links algorithm to this network, identifying locations where there are points on the network that are within 100 meters geographically and at least 500 meters apart on the network. First, the filtered OpenStreetMap data is converted to a graph. Given OpenStreetMap's topological structure this is relatively straightforward. Any place two or more ways (lines) share a node, a vertex in the graph is created, and edges are created for all ways connected to it. The graph is used to precompute a distance matrix between all nodes.
+
+Next, potential links are identified, with the help of the distance matrix and a spatial index. The algorithm identifies all place two edges pass within 100 m of one another but are at least 500 m apart in network distance (or completely disconnected).
+
+This process identifies hundreds of thousands of potential links in the region, though many provide effectively the same access (for instance, two different locations to cross a road a few meters apart). I use the heuristic deduplication method described in @bhagat-conway_close_2025 to reduce this to a more manageable amount. This tool groups links into "spheres of influence," using a greedy algorithm to group together links whose ends are within 100 m of the first link identified in the group. Each sphere of influence is then represented by the shortest link in the group. Link identification and deduplication used version 0.2.3 of the Missing Links tool.
+
+The Research Triangle network is much larger than the Charlotte network used by Bhagat-Conway et al. [-@bhagat-conway_close_2025], with 573,000 vertices and 672,000 edges (as opposed to 140,000/160,000). In initial testing, I found that identifying, deduplicating, and scoring links in this large network had unsatisfactory performance. However, since pedestrian access is only affected by the network in the local area, I solve this problem by partitioning the network into 24 sub-networks in a regular grid.
+
+To avoid edge effects, I buffer each grid cell by 1.1 km. I only retain links where at least one end is in the main part of the grid cell, rather than in the buffer, to avoid finding spurious links or scores caused by edge effects. Since the links are no more than are 100 m long and access is based on transit stops within 1 km, there is no way a portion of the network beyond the 1.1 km buffer could affect the link or its score. This guarantees that link identification and scoring is identical whether using a partitioned graph or a complete graph. Since the link deduplication process is greedy (i.e. sensitive to the order of the identified links), which links are selected to represent groups of similar links may vary slightly. The original ordering is arbitrary, so this is not expected to materially influence results.
 
 The identified links are based only on the network topology, without reference to the location of transit stops. The final step of the algorithm is to score the links based on their contribution to access. Tolerance for distance to transit is usually assumed to be between 400 m and 1 km; I take the upper end of this range and use the an access metric based on stops accessible within 1 km. Since some stops are more valuable than others, I weight stops by the number of trips serving them on a typical weekday. Note that high scoring links are often near transit stops, but this is not required; a link several hundred meters away could score highly if it completes or shortens a path to the stop.
 
@@ -123,13 +145,11 @@ f(d_{is}) = \begin{cases}
 \end{cases}
 $$ {#eq-cutoff}
 
-The Research Triangle network is much larger than the Charlotte network used by Bhagat-Conway et al. [-@bhagat-conway_close_2025], with 573,000 vertices and 672,000 edges (as opposed to 140,000/160,000). In initial testing, I found that identifying, deduplicating, and scoring links in this large network had unsatisfactory performance. However, since pedestrian access is only affected by the network in the local area, I solve this problem by partitioning the network into 24 sub-networks in a regular grid.
-
-To avoid edge effects, I buffer each grid cell by 1.1 km. I only retain links where at least one end is in the main part of the grid cell, rather than in the buffer, to avoid finding spurious links or scores caused by edge effects. Since the links are no more than are 100 m long and access is based on transit stops within 1 km, there is no way a portion of the network beyond the 1.1 km buffer could affect the link or its score. This guarantees that link identification and scoring is identical whether using a partitioned graph or a complete graph. Since the link deduplication process is greedy (i.e. sensitive to the order of the identified links), which links are selected to represent groups of similar links may vary slightly. The original ordering is arbitrary, so this is not expected to materially influence results.
-
 It is important to differentiate access _to_ transit from access _via_ transit. Access to transit measures the ability to get to a bus stop, while access via transit measures what destinations you can actually get to using the street network and transit system. For instance, providing access to a bus stop that is served by a bus that does not go to many destinations is much less valuable than providing access to a bus stop that connects to a large portion of the city's transit network.
 
-Links ranked highly by the Missing Links algorithm have a strong impact on access to transit, but access via transit is generally more interesting. Evaluating the access via transit for such a large number of links is computationally challenging. Instead, I take the 100 links that are ranked most highly, and I create a modified version of the input OpenStreetMap data that includes these links. I then evaluate access to jobs within 60 minutes via transit using this modified street network, to understand how these links that increase access to transit also increase access using transit.
+Links ranked highly by the Missing Links algorithm have a strong impact on access to transit, but access via transit is generally more interesting. Evaluating the access via transit for such a large number of links is computationally challenging. However, the only way street network investments can improve access via transit is through improving access to transit. Therefore, links that score highly for improving access to transit are more likely to be links that could also improve access via transit.
+
+Instead, I take the 100 links that are ranked most highly, and I create a modified version of the input OpenStreetMap data that includes these links. I then evaluate access to jobs within 60 minutes via transit using this modified street network, to understand how these links that increase access to transit also increase access using transit.
 
 I use the `r5r` package [@pereira_r5r_2021a; @conway_evidencebased_2017a] to perform access via transit calculations, using the GTFS data described above as well as the modified OpenStreetMap pedestrian network data. I calculate the number of jobs accessible within 60 minutes, based on the median travel time for departures between 7:00 and 9:00 AM on a weekday [see @conway_accounting_2018 for details]. I retrieve data on block-level job locations from the 2023 US Census Bureau Longitudinal Employer-Household Dynamics dataset.
 
