@@ -1,0 +1,130 @@
+```{r}
+options(java.parameters="-Xmx8G", r5r.r5jar="../r5/build/libs/r5-v4.1.0-124-g996dd94-all.jar")
+devtools::load_all("../r5r/r-package")
+library(sf)
+library(tidyverse)
+library(jsonlite)
+library(tmap)
+library(ggunc)
+DATA_PATH = Sys.getenv("DATA_PATH")
+
+#prj <- system.file("proj", package = "sf")[1]
+#Sys.setenv("PROJ_LIB" = prj)
+```
+
+```{r}
+# # create config file to control linking distance
+# write_json(list(minSubgraphSize=unbox(0), stopLinkRadiusMeters=unbox(20)), file.path(DATA_PATH, "networks", "baseline", "config.json"))
+# base = build_network(file.path(DATA_PATH, "networks", "baseline"), verbose=T, overwrite=T)
+# write_json(list(minSubgraphSize=unbox(0), stopLinkRadiusMeters=unbox(20)), file.path(DATA_PATH, "networks", "scenario", "config.json"))
+# scenario = build_network(file.path(DATA_PATH, "networks", "scenario"), verbose=T, overwrite=T)
+# write_json(list(minSubgraphSize=unbox(0), stopLinkRadiusMeters=unbox(20)), file.path(DATA_PATH, "networks", "ccc", "config.json"))
+# ccc = build_network(file.path(DATA_PATH, "networks", "ccc"), verbose=T, overwrite=T)
+```
+
+```{r}
+blocks = read_sf(file.path(DATA_PATH, "data", "hu.gpkg"))
+jobs = read_csv(file.path(DATA_PATH, "data", "nc_wac_S000_JT00_2023.csv.gz"), col_types=cols(w_geocode=col_character()))
+```
+
+```{r}
+blocks = blocks |>
+    # Confirmed same vintage
+    left_join(jobs, by=c("GEOID"="w_geocode")) |>
+    mutate(C000=replace_na(C000, 0)) |>
+    rename(id="GEOID")
+```
+
+```{r}
+points = st_centroid(blocks) |> st_transform(4326)
+```
+
+Get baseline values
+
+```{r}
+write_json(list(minSubgraphSize=unbox(0), stopLinkRadiusMeters=unbox(20)), file.path(DATA_PATH, "networks", "baseline", "config.json"))
+base = build_network(file.path(DATA_PATH, "networks", "baseline"), verbose=T, overwrite=T)
+acc_base = accessibility(
+    r5r_network = base,
+    origins = points,
+    destinations = points,
+    opportunities_colnames = "C000",
+    mode = "TRANSIT",
+    time_window=120L,
+    cutoffs=c(60),
+    departure_datetime=as.POSIXct("2025-07-17 07:00:00"),
+    progress=T
+)
+
+aggregate_access_base = points |>
+    left_join(acc_base, by="id") |>
+    with(sum(accessibility * H1_001N))
+
+stop_r5(base)
+```
+
+Now, run it for every graph, and get cumulative opportunity values.
+
+```{r}
+all_graphs = Sys.glob(file.path(DATA_PATH, "networks", "links", "link*"))
+stopifnot(length(all_graphs) == 1000)
+```
+
+```{r}
+aggregate_access_links = map_dbl(all_graphs, possibly(function (path) {
+    write_json(list(minSubgraphSize=unbox(0), stopLinkRadiusMeters=unbox(20)), file.path(path, "config.json"))
+    link = build_network(path, verbose=T, overwrite=T)
+    acc_link = accessibility(
+        r5r_network = link,
+        origins = points,
+        destinations = points,
+        opportunities_colnames = "C000",
+        mode = "TRANSIT",
+        time_window=120L,
+        cutoffs=c(60),
+        departure_datetime=as.POSIXct("2025-07-17 07:00:00"),
+        progress=T
+    )
+
+    aggregate_access_link = points |>
+        left_join(acc_link, by="id") |>
+        with(sum(accessibility * H1_001N))
+
+    stop_r5(link)
+
+    write_csv(data.frame(acc=aggregate_access_link), file.path(path, "access.csv"))
+
+    file.remove(file.path(path, "network.dat"))
+    file.remove(Sys.glob(file.path(path, "*.mapdb*")))
+
+    return(aggregate_access_link)
+}, quiet=FALSE), .progress=TRUE)
+```
+
+```{r}
+result = tibble(transit_score = aggregate_access_links, transit_score_delta = aggregate_access_links - aggregate_access_base, filename = all_graphs, link_id = str_extract(all_graphs, "[0-9]+") |> as.numeric())
+write_csv(result, "link_scores.csv")
+```
+
+## Gravity function evaluation
+
+### Negative exponential
+
+```{r}
+tibble(x = 1:1000) |>
+    mutate(y = exp(log(0.5) / (0.125 * 1609) * x)) |>
+    ggplot(aes(x=x/1609, y)) +
+    geom_line()
+
+```
+
+### 
+
+```{r}
+tibble(x = 1:1000) |>
+    mutate(y = x ^ (log(0.5) / log(0.125 * 1609))) |>
+    ggplot(aes(x=x/1609, y)) +
+    geom_line() +
+    scale_x_continuous(breaks = 1:12 / 20)
+
+```
