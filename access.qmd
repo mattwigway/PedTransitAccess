@@ -1,11 +1,12 @@
 ```{r}
-options(java.parameters="-Xmx4G", r5r.r5jar="../r5/build/libs/r5-v7.5-7-g996dd94-all.jar")
+options(java.parameters="-Xmx8G", r5r.r5jar="../r5/build/libs/r5-v4.1.0-124-g996dd94-all.jar")
 devtools::load_all("../r5r/r-package")
 library(sf)
 library(tidyverse)
 library(jsonlite)
 library(tmap)
 library(ggunc)
+library(gtfstools)
 DATA_PATH = Sys.getenv("DATA_PATH")
 
 prj <- system.file("proj", package = "sf")[1]
@@ -37,6 +38,14 @@ blocks = blocks |>
 
 ```{r}
 points = st_centroid(blocks) |> st_transform(4326)
+```
+
+```{r}
+routes = map(Sys.glob(file.path(DATA_PATH, "data", "gtfs", "*.zip")), function (fn) {
+    gtfs = read_gtfs(fn)
+    convert_shapes_to_sf(gtfs, shape_id = unique(gtfs$trips$shape_id), sort_sequence=TRUE)
+}) |>
+    list_rbind()
 ```
 
 ## Isochrones
@@ -132,12 +141,12 @@ walk_iso_map = tm_basemap(server="Esri.WorldImagery", alpha=0.5) +
             col.legend=tm_legend(show=T, title="", position=tm_pos_out("right", "center"))
             ) +
     tm_shape(mutate(stops, label="Other bus stops")) +
-        tm_dots(fill="label", size=0.5, fill.scale = tm_scale(values=c("pink")), fill.legend=tm_legend(show=T, title="", position=tm_pos_out("right", "center"))) +
+        tm_dots(fill="label", size=0.5, fill.scale = tm_scale(values=c("darkgreen")), fill.legend=tm_legend(show=T, title="", position=tm_pos_out("right", "center"))) +
     tm_shape(mutate(stop_loc, label="Stop")) +
-        tm_dots(fill="label", size=0.75, fill.scale = tm_scale(values=c("red")), fill.legend=tm_legend(show=T, title="", position=tm_pos_out("right", "center"))
+        tm_dots(fill="label", size=0.75, fill.scale = tm_scale(values=c("blue")), fill.legend=tm_legend(show=T, title="", position=tm_pos_out("right", "center"))
             ) +
     tm_shape(mutate(ccc_link, label="New link")) +
-        tm_lines(lwd=3, col="label", col.scale = tm_scale(values=c("orange")), col.legend=tm_legend(show=T, title="", position=tm_pos_out("right", "center"))
+        tm_lines(lwd=3, col="label", col.scale = tm_scale(values=c("red")), col.legend=tm_legend(show=T, title="", position=tm_pos_out("right", "center"))
             )
 
 walk_iso_map
@@ -162,12 +171,12 @@ walk_iso_map_wide = tm_basemap(server="Esri.WorldImagery", alpha=0.5) +
             col.legend=tm_legend(show=T, title="", position=tm_pos_out("right", "center"))
             ) +
     tm_shape(mutate(ccc_link, label="New link")) +
-        tm_lines(lwd=6, col="label", col.scale = tm_scale(values=c("orange")), col.legend=tm_legend(show=T, title="", position=tm_pos_out("right", "center"))
+        tm_lines(lwd=6, col="label", col.scale = tm_scale(values=c("red")), col.legend=tm_legend(show=T, title="", position=tm_pos_out("right", "center"))
             ) +
     tm_shape(mutate(stops, label="Other bus stops")) +
-        tm_dots(fill="label", size=0.5, fill.scale = tm_scale(values=c("pink")), fill.legend=tm_legend(show=T, title="", position=tm_pos_out("right", "center"))) +
+        tm_dots(fill="label", size=0.5, fill.scale = tm_scale(values=c("lightblue")), fill.legend=tm_legend(show=T, title="", position=tm_pos_out("right", "center"))) +
     tm_shape(mutate(stop_loc, label="Stop")) +
-        tm_dots(fill="label", size=0.75, fill.scale = tm_scale(values=c("red")), fill.legend=tm_legend(show=T, title="", position=tm_pos_out("right", "center"))
+        tm_dots(fill="label", size=0.75, fill.scale = tm_scale(values=c("blue")), fill.legend=tm_legend(show=T, title="", position=tm_pos_out("right", "center"))
             ) +
     tm_credits("Data © OpenStreetMap contributors, Esri, Mapbox, NC CGIA, Microsoft, Vantor")
 
@@ -357,7 +366,7 @@ acc_map = tm_basemap(
     fill = "acc_inc",
     fill.scale = tm_scale_intervals(
       style = "fixed",
-      breaks = c(1, 500, 1000, 5000, 10000, 105000),
+      breaks = c(1, 500, 1000, 5000, 10000, 220000),
       # drop the lightest colors for legibility
       values = rev(viridis::mako(8)[1:6])
     ),
@@ -368,6 +377,8 @@ acc_map = tm_basemap(
       position = tm_pos_in("right", "top")
     )
   ) +
+  tm_shape(routes |> mutate(label="Bus routes")) +
+  tm_lines(col="label", col.scale = tm_scale(values = c("#777777")), col.legend = tm_legend(title = "", position = tm_pos_in("right", "top"))) +
   tm_shape(filter(links, rank <= 100) |> mutate(label = "New links")) +
   tm_dots(
     fill = "label",
@@ -390,6 +401,8 @@ tmap_save(
   height = 8,
   bg = "white"
 )
+
+acc_map
 ```
 
 ```{r}

@@ -1,0 +1,145 @@
+```{r}
+library(tidyverse)
+library(sf)
+library(ggunc)
+library(ggspatial)
+```
+
+```{r}
+
+DATA_PATH = Sys.getenv("DATA_PATH")
+blocks = read_sf(file.path(DATA_PATH, "data", "hu.gpkg"))
+
+```
+
+```{r}
+all_top100_files = Sys.glob(file.path(DATA_PATH, "networks", "links_top100", "*", "disaggregate.csv"))
+stopifnot(length(all_top100_files) == 100)
+```
+
+```{r}
+top100 = map(all_top100_files, \(x) (read_csv(x, col_types = cols(id = col_character()), show_col_types = F) |> mutate(link = as.numeric(str_extract(x, "link_id_([0-9]+)", group = 1))))) |>
+    list_rbind()
+
+base = read_csv(file.path(DATA_PATH, "networks", "baseline", "disaggregate.csv"))
+```
+
+```{r}
+top100 = top100 |>
+    left_join(base, join_by(id), relationship = "many-to-one", suffix = c("_link", "_base")) |>
+    mutate(accessibility_delta = accessibility_link - accessibility_base, accessibility_pctchg = accessibility_link / accessibility_base)
+```
+
+```{r}
+max_access_increase = top100 |>
+    group_by(link) |>
+    summarize(max_abs = max(accessibility_delta))
+
+max_access_increase |>
+    ggplot(aes(x = max_abs)) +
+        geom_histogram() +
+        xlab("Largest job access increase\n(jobs within 60 minutes)") +
+        ylab("") +
+        scale_x_continuous(labels = scales::comma) +
+        annotate("text", x = Inf, y = Inf, label = sprintf(
+            "Mean: %s\n25th percentile: %s\nMedian: %s\n75th percentile: %s",
+            scales::comma(round(mean(max_access_increase$max_abs))),
+            scales::comma(round(quantile(max_access_increase$max_abs, 0.25))),
+            scales::comma(round(median(max_access_increase$max_abs))),
+            scales::comma(round(quantile(max_access_increase$max_abs, 0.75)))
+        ), hjust=1.1, vjust=1.2)
+
+ggsave(here::here("paper/figures/top100.png"), width = 6, height = 4, dpi = 600, bg = "white")
+```
+
+Sensitivity test medians
+
+```{r}
+max_access_increase |>
+    left_join(st_drop_geometry(links), join_by(link == id)) |>
+    filter(rank <= 10) |>
+    summarize(median = median(max_abs), n = n())
+```
+
+```{r}
+max_access_increase |>
+    left_join(st_drop_geometry(links), join_by(link == id)) |>
+    ggplot(aes(x=rank, y=max_abs)) +
+        geom_point()
+```
+
+## What about aggregate
+
+```{r}
+agg = top100 |>
+    left_join(blocks, join_by(id == GEOID)) |>
+    group_by(link) |>
+    summarize(
+        agg = sum(accessibility * H1_001N),
+        delta = agg - with(base, sum(accessibility * H1_001N))
+    )
+
+agg |>
+    left_join(links, join_by(link == id)) |>
+    summarize(cor(rank, agg, method = "spearman"))
+```
+
+```{r}
+agg |>
+    ggplot(aes(x = delta)) +
+        geom_histogram() +
+        xlab("Largest job access increase\n(jobs within 60 minutes)") +
+        ylab("") +
+        scale_x_continuous(labels = scales::comma) +
+        annotate("text", x = Inf, y = Inf, label = sprintf(
+            "Mean: %s\n25th percentile: %s\nMedian: %s\n75th percentile: %s",
+            scales::comma(round(mean(agg$delta))),
+            scales::comma(round(quantile(agg$delta, 0.25))),
+            scales::comma(round(median(agg$delta))),
+            scales::comma(round(quantile(agg$delta, 0.75)))
+        ), hjust=1.1, vjust=1.2)
+
+ggsave(here::here("paper/figures/top100_agg.png"), width = 6, height = 4, dpi = 600, bg = "white")
+```
+
+## Evaluate reduced access
+
+```{r}
+blocks = read_sf(file.path(DATA_PATH, "data", "hu.gpkg"))
+jobs = read_csv(file.path(DATA_PATH, "data", "nc_wac_S000_JT00_2023.csv.gz"), col_types=cols(w_geocode=col_character()))
+```
+
+```{r}
+blocks = blocks |>
+    # Confirmed same vintage
+    left_join(jobs, by=c("GEOID"="w_geocode")) |>
+    mutate(C000=replace_na(C000, 0)) |>
+    rename(id="GEOID")
+```
+
+```{r}
+points = st_centroid(blocks) |> st_transform(4326)
+```
+
+
+```{r}
+negative_acc = top100 |>
+    filter(accessibility_delta < 0) |>
+    select(id, link, accessibility_link, accessibility_base)
+```
+
+```{r}
+links = read_sf(file.path(Sys.getenv("DATA_PATH"), "data", "links.gpkg"))
+```
+
+```{r}
+negative_acc_sf = links |>
+    inner_join(negative_acc, join_by(id == link)) |>
+    st_set_crs(32119)
+    ggplot() +
+        annotation_map_tile(alpha = 0.5) +
+        layer_spatial(negative_acc_sf) +
+        layer_spatial(points |> inner_join(mutate(negative_acc, id = as.character(id)), join_by(id)))
+```
+
+Effect is tiny, gotta be rounding.

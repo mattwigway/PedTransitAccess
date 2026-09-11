@@ -56,6 +56,8 @@ acc_base = accessibility(
     progress=T
 )
 
+write_csv(acc_base, file.path(DATA_PATH, "networks", "baseline", "disaggregate.csv"))
+
 aggregate_access_base = points |>
     left_join(acc_base, by="id") |>
     with(sum(accessibility * H1_001N))
@@ -71,6 +73,8 @@ stopifnot(length(all_graphs) == 1000)
 ```
 
 ```{r}
+#| eval: false
+# skip for now
 aggregate_access_links = map_dbl(all_graphs, possibly(function (path) {
     write_json(list(minSubgraphSize=unbox(0), stopLinkRadiusMeters=unbox(20)), file.path(path, "config.json"))
     link = build_network(path, verbose=T, overwrite=T)
@@ -106,6 +110,44 @@ result = tibble(transit_score = aggregate_access_links, transit_score_delta = ag
 write_csv(result, "link_scores.csv")
 ```
 
+## Top 250
+
+```{r}
+top100 = Sys.glob(file.path(DATA_PATH, "networks", "links_top250", "link*"))
+stopifnot(length(top100) == 250)
+
+aggregate_access_top100 = map_dbl(top100, possibly(function (path) {
+    write_json(list(minSubgraphSize=unbox(0), stopLinkRadiusMeters=unbox(20)), file.path(path, "config.json"))
+    link = build_network(path, verbose=T, overwrite=T)
+    acc_link = accessibility(
+        r5r_network = link,
+        origins = points,
+        destinations = points,
+        opportunities_colnames = "C000",
+        mode = "TRANSIT",
+        time_window=120L,
+        cutoffs=c(60),
+        departure_datetime=as.POSIXct("2025-07-17 07:00:00"),
+        progress=T
+    )
+
+    write_csv(acc_link, file.path(path, "disaggregate.csv"))
+
+    aggregate_access_link = points |>
+        left_join(acc_link, by="id") |>
+        with(sum(accessibility * H1_001N))
+
+    stop_r5(link)
+
+    write_csv(data.frame(acc=aggregate_access_link), file.path(path, "access.csv"))
+
+    file.remove(file.path(path, "network.dat"))
+    file.remove(Sys.glob(file.path(path, "*.mapdb*")))
+
+    return(aggregate_access_link)
+}, quiet=FALSE), .progress=TRUE)
+```
+
 ## Gravity function evaluation
 
 ### Negative exponential
@@ -128,3 +170,5 @@ tibble(x = 1:1000) |>
     scale_x_continuous(breaks = 1:12 / 20)
 
 ```
+
+About 9 hours to do the top 250.

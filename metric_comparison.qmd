@@ -3,6 +3,10 @@ library(tidyverse)
 library(sf)
 library(ggspatial)
 library(ggunc)
+options(java.parameters="-Xmx8G", r5r.r5jar="../r5/build/libs/r5-v4.1.0-124-g996dd94-all.jar")
+devtools::load_all("../r5r/r-package")
+
+DATA_PATH = Sys.getenv("DATA_PATH")
 ```
 
 ```{r}
@@ -58,6 +62,10 @@ linked |>
 ```
 
 ```{r}
+median(linked[linked$rank <= 200,]$transit_score_delta)
+```
+
+```{r}
 ggplot() +
     layer_spatial(st_centroid(st_set_crs(linked, 32119)), aes(color = transit_score_delta), size=0.5) +
     scale_color_binned(breaks = c(0, 100000, 500000, 1000000, 10000000), palette = "reds")
@@ -69,19 +77,9 @@ ggplot() +
 reduced_access = linked |>
     filter(transit_score_delta < 0)
 
-View(reduced_access)
-```
-
-```{r}
-ggplot() +
-    annotation_map_tile() +
-    layer_spatial(st_centroid(st_set_crs(reduced_access, 32119)))
-```
-
-```{r}
-linked |>
-    st_set_crs(32119)  |>
-    write_sf(file.path("/mnt/c/Users/mwbc/OneDrive - University of North Carolina at Chapel Hill/ped_transit_access/", "data", "joined_links.gpkg"))
+reduced_access |>
+    st_drop_geometry() |>
+    select(id, transit_score_delta)
 ```
 
 ## Baseline
@@ -130,78 +128,9 @@ aggregate_access_base = points |>
 aggregate_access_base
 ```
 
-## Link 48314
+## Functions for evaluating link changes
 
-```{r}
-link = build_network(file.path(DATA_PATH, "networks", "links", "link_id_48314"), verbose=T, overwrite=T)
-acc_link = accessibility(
-    r5r_network = link,
-    origins = points,
-    destinations = points,
-    opportunities_colnames = "C000",
-    mode = "TRANSIT",
-    time_window=120L,
-    cutoffs=c(60),
-    departure_datetime=as.POSIXct("2025-07-17 07:00:00"),
-    progress=T
-)
-
-aggregate_access_link = points |>
-    left_join(acc_link, by="id") |>
-    with(sum(accessibility * H1_001N))
-
-aggregate_access_link
-```
-
-```{r}
-aggregate_access_link - aggregate_access_base
-```
-
-```{r}
-acc_link |>
-    left_join(acc_base, by="id") |>
-    filter(accessibility.x < accessibility.y) |>
-    mutate(diff = accessibility.x - accessibility.y)
-```
-
-So this one is different, it's not just one location, or if it is it's one with a job center.
-
-
-```{r}
-# so, one location has way lower accessibility and others have marginally lower, so I think that one
-# location must have gotten disconnected rather than just a slight time increase due to a rounding error.
-orig = points |> filter(id == "370630020152001")
-
-iso_base = isochrone(
-    r5r_network = base,
-    origins = orig,
-    cutoffs = c(60),
-    departure_datetime = as.POSIXct("2025-07-17 07:00:00")
-)
-
-iso_link = isochrone(
-    r5r_network = link,
-    origins = orig,
-    cutoffs = c(60),
-    departure_datetime = as.POSIXct("2025-07-17 07:00:00")
-)
-
-problem_pt = points |> filter(str_starts(id, "370630010023000"))
-
-ggplot() +
-    annotation_map_tile(alpha = 0.5) +
-    annotation_spatial(iso_base, fill="red", alpha = 0.15) +
-    annotation_spatial(iso_link, fill="blue", alpha = 0.15) +
-    layer_spatial(problem_pt) +
-    shadow_spatial(st_buffer(problem_pt, 100))
-
-```
-
-ok so what's going on here is that this block centroid is linked to the parking lot in the baseline, but gets linked to the new link in the scenario, which puts it and its one job just a little out of reach as the new link is a little further from the bus stop on Holloway - and put the rest of the network a little out of reach for it.
-
-```{r}
-problem_pt$C000
-```
+### Plot them all
 
 ```{r}
 ps = map(reduced_access$id, function  (theid) {
@@ -244,7 +173,7 @@ ggplot() +
 ```
 
 ```{r}
-get_iso_link = function (linkid, origin) {
+get_iso_link = function (linkid, origin, cutoff = 60) {
     link = build_network(file.path(DATA_PATH, "networks", "links", paste0("link_id_", linkid)), verbose=T)
 
     pt = points[points$id == origin,]
@@ -254,7 +183,7 @@ get_iso_link = function (linkid, origin) {
         origins = pt,
         mode = "TRANSIT",
         time_window=120L,
-        cutoffs=c(60),
+        cutoffs=c(cutoff),
         departure_datetime=as.POSIXct("2025-07-17 07:00:00"),
         zoom = 11
     )
@@ -264,7 +193,7 @@ get_iso_link = function (linkid, origin) {
         origins = pt,
         mode = "TRANSIT",
         time_window=120L,
-        cutoffs=c(60),
+        cutoffs=c(cutoff),
         departure_datetime=as.POSIXct("2025-07-17 07:00:00"),
         zoom = 11
     )
@@ -306,7 +235,7 @@ get_ttm_link = function (linkid) {
         left_join(select(points, id, H1_001N), join_by(from_id == id)) |>
         left_join(select(points, id, C000), join_by(to_id == id))
 
-    print(sprintf("Largest difference: %d", max(result$travel_time_p50.link - result$travel_time_p50.base)))
+    print(sprintf("Largest difference: %d", max(result$travel_time_p50.link - result$travel_time_p50.base, na.rm=T)))
 
     return(result)
 }
@@ -325,7 +254,7 @@ map_affected_trips = function (linkid, ttm) {
 
     ggplot() +
         annotation_map_tile(alpha = 0.5, zoomin = 1) +
-        annotation_spatial(points) +
+        annotation_spatial(points, size=0.1) +
         layer_spatial(reduced_access |> filter(id ==linkid) |> st_set_crs(32119)) +
         layer_spatial(dat, color="red")
     
@@ -341,220 +270,174 @@ link_net_to_sf = function (linkid) {
 }
 ```
 
-## Link 862
+## Link 5989
+
 ```{r}
 ps[[1]]
 ```
 
 ```{r}
-ttm = get_ttm_link(862)
+ttm = get_ttm_link(5989)
 
 ttm |>
-    filter(travel_time_p50.link >= 60 & travel_time_p50.base < 60)
+    filter(travel_time_p50.link >= 60 & travel_time_p50.base < 60) |>
+    select(from_id, to_id, travel_time_p50.link, travel_time_p50.base, H1_001N, C000)
 ```
 
 ```{r}
-map_affected_trips(862, ttm)
+map_affected_trips(5989, ttm)
 ```
 
-This is pretty obviously due to linking changes.
+```{r}
+get_iso_link(5989, "371350112071010", cutoff = 60)
+```
 
-## Link 6200 (-156)
+This is just creating a marginally longer walk to the bus stop.
+
+## Link 13124
 
 ```{r}
 ps[[2]]
 ```
 
 ```{r}
-get_acc_link(6200)
+ttm = get_ttm_link(13124)
+
+ttm |>
+    filter(travel_time_p50.link >= 60 & travel_time_p50.base < 60) |>
+    select(from_id, to_id, travel_time_p50.link, travel_time_p50.base, H1_001N, C000)
 ```
 
 ```{r}
-ttm6200 = get_ttm_link(6200)
-
-ttm6200 |>
-    filter(travel_time_p50.link >= 60 & travel_time_p50.base < 60)
+map_affected_trips(13124, ttm)
 ```
 
-```{r}
-get_iso_link(6200, 371830537301002)
-```
+Gotta be rounding.
 
-This has to be rounding.
-
-## Link 13267 (-18)
+## Link 21601
 
 ```{r}
 ps[[3]]
 ```
 
 ```{r}
-get_acc_link(13267)
+ttm = get_ttm_link(21601)
+
+ttm |>
+    filter(travel_time_p50.link >= 60 & travel_time_p50.base < 60) |>
+    select(from_id, to_id, travel_time_p50.link, travel_time_p50.base, H1_001N, C000)
 ```
 
 ```{r}
-get_ttm_link(13267) |>
-    filter(travel_time_p50.link >= 60 & travel_time_p50.base < 60)
+map_affected_trips(21601, ttm)
 ```
 
 Gotta be rounding.
 
-## Link 22763
+## Link 22988
 
 ```{r}
 ps[[4]]
 ```
 
 ```{r}
-get_acc_link(22763)
+ttm = get_ttm_link(22988)
+
+ttm |>
+    filter(travel_time_p50.link >= 60 & travel_time_p50.base < 60) |>
+    select(from_id, to_id, travel_time_p50.link, travel_time_p50.base, H1_001N, C000)
 ```
 
 ```{r}
-get_ttm_link(22763) |>
-    filter(travel_time_p50.link >= 60 & travel_time_p50.base < 60)
+map_affected_trips(22988, ttm)
 ```
 
-This one forces a double-back by linking to the new link instead of to the parking aisle.
+```{r}
+get_iso_link(22988, "371830545024010")
+```
 
-## Link 24140
+This one is an evil snapping change. Previously it snapped to parking aisle and sidewalk fragment that has a bus stop connected to it, but now there is a closer link that connects two fragments that don't have bus stops, so access drops drastically.
+
+## Link 34752
 
 ```{r}
 ps[[5]]
 ```
 
 ```{r}
-ttm = get_ttm_link(24140)
+ttm = get_ttm_link(34752)
 
 ttm |>
-    filter(travel_time_p50.link >= 60 & travel_time_p50.base < 60)
+    filter(travel_time_p50.link >= 60 & travel_time_p50.base < 60) |>
+    select(from_id, to_id, travel_time_p50.link, travel_time_p50.base, H1_001N, C000)
 ```
-
-
 
 ```{r}
-map_affected_trips(24140, ttm)
+map_affected_trips(34752, ttm)
 ```
 
-This one is just that these trips are probably walk trips that became marginally longer due to snapping.
+```{r}
+get_iso_link(34752, "371830517003010")
+```
 
-## Link 27541 (-39215)
+Gotta be rounding.
+
+## Link 45375
 
 ```{r}
 ps[[6]]
 ```
 
 ```{r}
-ttm = get_ttm_link(27541)
+ttm = get_ttm_link(45375)
 
 ttm |>
-    filter(travel_time_p50.link >= 60 & travel_time_p50.base < 60)
+    filter(travel_time_p50.link >= 60 & travel_time_p50.base < 60) |>
+    select(from_id, to_id, travel_time_p50.link, travel_time_p50.base, H1_001N, C000)
 ```
 
 ```{r}
-map_affected_trips(27541, ttm)
+map_affected_trips(45375, ttm)
 ```
 
-```{r}
-get_acc_link(27541)
-```
+Previously snapped to the driveway right by the bus stop, now requires a detour to the other link.
 
-Not exactly sure here because the affected trips are mostly in opposite direction, but it's gotta be some kind of rounding error.
-
-
-## Link 48314
+## Link 45495
 
 ```{r}
 ps[[7]]
 ```
 
-Snapping changed, no surprise here.
+```{r}
+ttm = get_ttm_link(45495)
 
-## Link 58495 (-24)
+ttm |>
+    filter(travel_time_p50.link >= 60 & travel_time_p50.base < 60) |>
+    select(from_id, to_id, travel_time_p50.link, travel_time_p50.base, H1_001N, C000)
+```
+
+```{r}
+map_affected_trips(45495, ttm)
+```
+
+Gotta be rounding.
+
+## Link 67181
 
 ```{r}
 ps[[8]]
 ```
 
+This is a linking issue exacerbated by a data issue, the link connects to the street but the point previously linked to a separate sidewalk network.
+
 ```{r}
-ttm = get_ttm_link(58495)
+ttm = get_ttm_link(67181)
 
 ttm |>
-    filter(travel_time_p50.link >= 60 & travel_time_p50.base < 60)
+    filter(travel_time_p50.link >= 60 & travel_time_p50.base < 60) |>
+    select(from_id, to_id, travel_time_p50.link, travel_time_p50.base, H1_001N, C000)
 ```
 
 ```{r}
-map_affected_trips(58495, ttm)
+map_affected_trips(67181, ttm)
 ```
-
-Gotta be rounding.
-
-## Link 59463
-
-```{r}
-ps[[9]]
-```
-
-```{r}
-ttm = get_ttm_link(59463)
-
-ttm |>
-    filter(travel_time_p50.link >= 60 & travel_time_p50.base < 60)
-```
-
-```{r}
-map_affected_trips(59463, ttm)
-```
-
-This must be snapping.
-
-## Link 5969
-6
-
-```{r}
-ps[[10]]
-```
-
-```{r}
-get_acc_link(59696)
-```
-
-```{r}
-get_iso_link(59696, "371830535232012")
-```
-
-```{r}
-ggplot() +
-    annotation_map_tile(alpha = 0.5, zoomin = 1) +
-    layer_spatial(reduced_access |> filter(id == 69007) |> st_set_crs(32119)) +
-    layer_spatial(inner_join(points, link59696, by = "id"))
-```
-
-```{r}
-ttm59696 = get_ttm_link(59696)
-```
-
-My conclusion here is that this one is another false positive - I'm not exactly sure what is happening, I suspect it's rouding
-
-```{r}
-street_network_to_sf(base)$edges |>
-    write_sf("base.gpkg")
-```
-
-```{r}
-link_net_to_sf(59696) |>
-    write_sf("59696.gpkg")
-```
-
-IDK this has to be rounding.
-
-## Link 69007
-
-```{r}
-ps[[11]]
-```
-
-```{r}
-link69007 = get_acc_link(69007)
-```
-
-OK, so this one is just that snapping makes the route marginally longer, and there are a handful of places where that marginally-longer matters.

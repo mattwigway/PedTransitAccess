@@ -10,9 +10,9 @@ import GeoFormatTypes as GFT
 import Serialization: serialize
 import StatsBase: competerank
 import PedTransitAccess: create_pbfs, read_and_filter, insert_links!, build_way_idx
-import MissingLinks: CandidateLink
+import MissingLinks: CandidateLink, TraversalRule
 import OpenStreetMapPBF: write_pbf
-import StatsBase: sample
+import StatsBase: sample, cor, corspearman
 import Random: Xoshiro
 
 config = TOML.parsefile(joinpath(@__DIR__, ".Renviron"))
@@ -26,7 +26,28 @@ G = MissingLinks.graph_from_osm(
     # In MissingLinks 0.2.3, this has highway=road included, which is arguably a mistake
     # this will be fixed in 0.2.4, but it's not actually a problem for this analysis
     # as there are no such ways in the input data.
-    MissingLinks.DEFAULT_TRAVERSAL_SETTINGS,
+    MissingLinks.RuleBasedTraversalPermissionSettings([
+        # this is not in the MissingLinks default labeler, but is important for parity with R5
+        TraversalRule("access" .=> ["no", "private", "destination" ,"customers" ,
+            "delivery", "forestry" ,"agricultural",
+                "residents" ,"resident",
+                "customer", "private"], false),
+
+        # things designated pedestrian or explicitly tagged as such - treat as walkable
+        TraversalRule("foot" .=> ["yes", "designated"], true),
+
+        # things designated not pedestrian
+        TraversalRule(["foot"] .=> "no", false),
+
+        # things we assume are pedestrian
+        TraversalRule([
+                ("highway" .=> ["footway", "cycleway", "pedestrian", "track", "sidewalk", "service", "living_street", "steps", "path", "crossing", "residential"])...,
+                ("sidewalk" .=> ["yes", "both", "left", "right"])...,
+                "sidewalk:left" => "yes",
+                "sidewalk:right" => "yes",
+                "sidewalk:both" => "yes"
+            ], true)
+    ], false),
     GFT.EPSG(32119) # State Plane NC, meters
 )
 ```
@@ -103,7 +124,7 @@ stop_vertices = MissingLinks.link_points!(G, all_stops.geom, create=true, tol=20
 It's too big to run all at once
 
 ```{julia}
-Gs = MissingLinks.partition(G, 6, 4, 1100)
+Gs = MissingLinks.partition(G, 6, 4, 1450)
 
 @info "vertices per partition" nv.(Gs)
 @info "edges per partition" ne.(Gs)
@@ -169,7 +190,7 @@ for r in 1:size(Gs, 1), c in 1:size(Gs, 2)
 
         @info "scoring links"
         score_matrix[r, c] = score_links(x -> x < 1000, Gsub, candidate_links[r, c], matrix, sub_origin_weights, weights, 1000)
-        score_matrix_gravity = score_links(x -> x > 1350 ? 0 : exp(x * -0.00344635), Gsub, candidate_links[r, c], matrix, sub_origin_weights, weights, 1350)
+        score_matrix_gravity[r, c] = score_links(x -> x > 1350 ? 0 : exp(x * -0.00344635), Gsub, candidate_links[r, c], matrix, sub_origin_weights, weights, 1350)
     end
 
     rm("distances.bin")
@@ -183,10 +204,21 @@ end
 links, scores = MissingLinks.merge_links(G, Gs, candidate_links, score_matrix)
 links_gravity, scores_gravity = MissingLinks.merge_links(G, Gs, candidate_links, score_matrix_gravity)
 
+# 34 mins on PC
 @info "Runtime: $(round((Dates.now() - algorithm_start), Minute))"
 
 @assert all(links .== links_gravity)
 ```
+
+
+```{julia}
+cor(scores, scores_gravity)
+```
+
+```{julia}
+corspearman(scores, scores_gravity)
+```
+
 
 ## Write output
 
@@ -197,7 +229,7 @@ ids = 1:length(links)
 
 GeoDataFrames.write(
     joinpath(DATA_PATH, "data", "links.gpkg"),
-    links_to_gis(G, links, "score"=>scores, "rank" => ranks, "id" => ids)
+    links_to_gis(G, links, "score"=>scores, "score_gravity" => scores_gravity,  "rank" => ranks, "id" => ids)
 )
 ```
 
@@ -213,36 +245,60 @@ create_pbfs(
 )
 ```
 
-## Create individual PBFs for each link
+## Create individual PBFs for a random sample of links
 
 ```{julia}
-base = read_and_filter(
-    joinpath(DATA_PATH, "networks", "baseline", "triangle-base.osm.pbf"),
-    MissingLinks.RuleBasedTraversalPermissionSettings([], true)
-)
+# base = read_and_filter(
+#     joinpath(DATA_PATH, "networks", "baseline", "triangle-base.osm.pbf"),
+#     # already filtered
+#     MissingLinks.RuleBasedTraversalPermissionSettings([], true)
+# )
 
-sidx = build_way_idx(base.ways, base.nodes)
-total = sum(scores .> 0)
+# sidx = build_way_idx(base.ways, base.nodes)
+# total = sum(scores .> 0)
 
-sample_size = 1000
-rng = Xoshiro(27599)
-link_indices = sample(collect(eachindex(links))[scores .> 0], sample_size, replace=false)
+# sample_size = 1000
+# rng = Xoshiro(27599)
+# link_indices = sample(collect(eachindex(links))[scores .> 0], sample_size, replace=false)
 
+# # NB LibSpatialIndex is used here and is not threadsafe, do not parallelize this loop
+# for (idx, linkid, link, rank) in zip(1:total, ids[link_indices], links[link_indices], ranks[link_indices])
+#     # shallow copies, for use with copy-on-write operations
+#     ways = copy(base.ways)
+#     nodes = copy(base.nodes)
+#     insert_links!(G, ways, nodes, [link], idx = sidx)
+#     dir = joinpath(DATA_PATH, "networks", "links", "link_id_$linkid")
+#     if !isdir(dir)
+#         mkpath(dir)
+#     end
+
+#     write_pbf(joinpath(dir, "link_id_$(linkid).osm.pbf"), values(nodes), ways, [])
+
+#     if idx % 10 == 0
+#         @info "Wrote $idx / $sample_size OSM files"
+#     end
+# end
+```
+
+## Create individual PBFs for the top 200 links
+
+```{julia}
+link_indices = eachindex(links)[ranks .≤ 250]
 # NB LibSpatialIndex is used here and is not threadsafe, do not parallelize this loop
-for (idx, linkid, link, rank) in zip(1:total, ids[link_indices], links[link_indices], ranks[link_indices])
+for (idx, linkid, link, rank) in zip(1:length(link_indices), ids[link_indices], links[link_indices], ranks[link_indices])
     # shallow copies, for use with copy-on-write operations
     ways = copy(base.ways)
     nodes = copy(base.nodes)
     insert_links!(G, ways, nodes, [link], idx = sidx)
-    dir = joinpath(DATA_PATH, "networks", "link_id_$linkid")
+    dir = joinpath(DATA_PATH, "networks", "links_top250", "link_id_$linkid")
     if !isdir(dir)
         mkpath(dir)
     end
 
-    write_pbf(joinpath(dir, "link_id_$(linkid)).osm.pbf"), values(nodes), ways, [])
+    write_pbf(joinpath(dir, "link_id_$(linkid).osm.pbf"), values(nodes), ways, [])
 
     if idx % 10 == 0
-        @info "Wrote $idx / $sample_size OSM files"
+        @info "Wrote $idx / $sample_size top150 OSM files"
     end
 end
 ```
@@ -264,7 +320,6 @@ create_pbfs(
     G
 )
 ```
-
 
 ```{julia}
 
