@@ -3,6 +3,8 @@ library(tidyverse)
 library(sf)
 library(ggspatial)
 library(ggunc)
+library(gtfstools)
+library(ggbreak)
 options(java.parameters="-Xmx8G", r5r.r5jar="../r5/build/libs/r5-v4.1.0-124-g996dd94-all.jar")
 devtools::load_all("../r5r/r-package")
 
@@ -24,10 +26,6 @@ with(linked, cor(score, transit_score_delta))
 ```
 
 ```{r}
-with(linked, cor(score, transit_score_delta))
-```
-
-```{r}
 with(linked, cor(score, transit_score_delta, method="spearman"))
 ```
 
@@ -38,8 +36,8 @@ linked |>
 ```
 
 ```{r}
-linked |>
-    ggplot(aes(x=score, y=transit_score_delta)) +
+pfull = linked |>
+    ggplot(aes(x=score, y=to_broken_vals(transit_score_delta))) +
         geom_point(size = 0.5) +
         geom_smooth(method = "lm") +
         xlab("Access to transit score") +
@@ -48,7 +46,14 @@ linked |>
         scale_x_continuous(labels = scales::comma) +
         scale_y_continuous(labels = scales::comma)#, limits = c(0, 7.5e7))
 
+
 ggsave("paper/figures/comparison.png", width = 6, height = 4, bg="white")
+```
+
+The spearman correlation is highly statistically significant.
+
+```{r}
+lm(rank(transit_score_delta) ~ rank(score), linked) |> summary()
 ```
 
 ```{r}
@@ -121,6 +126,7 @@ acc_base = accessibility(
 
 # was: 16658840178
 # now: 17102493206
+# now: 16952351630
 aggregate_access_base = points |>
     left_join(acc_base, by="id") |>
     with(sum(accessibility * H1_001N))
@@ -140,7 +146,7 @@ ps = map(reduced_access$id, function  (theid) {
         shadow_spatial(reduced_access |> filter(id == theid) |> st_set_crs(32119) |> st_buffer(100)) +
         annotation_spatial(points, color="red") +
         theme_void() +
-        ggtitle(theid)
+        ggtitle(sprintf("Link %d, access change %d", theid, reduced_access[reduced_access$id == theid, "transit_score_delta"][[1]]))
 })
 ```
 
@@ -217,8 +223,8 @@ ttm_base = travel_time_matrix(
     departure_datetime=as.POSIXct("2025-07-17 07:00:00")
 )
 
-get_ttm_link = function (linkid) {
-    link = build_network(file.path(DATA_PATH, "networks", "links", paste0("link_id_", linkid)), verbose=T)
+get_ttm_link = function (linkid, dir="links") {
+    link = build_network(file.path(DATA_PATH, "networks", dir, paste0("link_id_", linkid)), verbose=T)
 
     ttm_link = travel_time_matrix(
         r5r_network = link,
@@ -270,174 +276,327 @@ link_net_to_sf = function (linkid) {
 }
 ```
 
-## Link 5989
+## Link 5294
+
+Gotta be rounding.
 
 ```{r}
 ps[[1]]
 ```
 
 ```{r}
-ttm = get_ttm_link(5989)
+ttm = get_ttm_link(5294)
 
-ttm |>
-    filter(travel_time_p50.link >= 60 & travel_time_p50.base < 60) |>
-    select(from_id, to_id, travel_time_p50.link, travel_time_p50.base, H1_001N, C000)
+ttm |> filter(travel_time_p50.link >= 60 & travel_time_p50.base < 60) |>
+    st_drop_geometry() |>
+    select(ends_with("id"), starts_with("travel"))
 ```
 
 ```{r}
-map_affected_trips(5989, ttm)
+map_affected_trips(5294, ttm)
 ```
 
-```{r}
-get_iso_link(5989, "371350112071010", cutoff = 60)
-```
+## Link 8525
 
-This is just creating a marginally longer walk to the bus stop.
-
-## Link 13124
+This one's pretty clearly a linking change.
 
 ```{r}
 ps[[2]]
 ```
 
 ```{r}
-ttm = get_ttm_link(13124)
+ttm = get_ttm_link(8525)
 
-ttm |>
-    filter(travel_time_p50.link >= 60 & travel_time_p50.base < 60) |>
-    select(from_id, to_id, travel_time_p50.link, travel_time_p50.base, H1_001N, C000)
+ttm |> filter(travel_time_p50.link >= 60 & travel_time_p50.base < 60) |>
+    st_drop_geometry() |>
+    select(ends_with("id"), starts_with("travel"))
 ```
 
 ```{r}
-map_affected_trips(13124, ttm)
+map_affected_trips(8525, ttm)
 ```
 
-Gotta be rounding.
+## Link 9630
 
-## Link 21601
+Looks like linking, slightly longer path.
+
+This is a good example of the issues with network construction: https://www.openstreetmap.org/search?query=mingocrest+dr&zoom=18&minlon=-79.03669595718385&minlat=35.92202502675714&maxlon=-79.03111159801485&maxlat=35.92520056770574#map=18/35.792199/-78.497639
+
+Sidewalk opposite not connected to cul de sac so this link is useless.
 
 ```{r}
 ps[[3]]
 ```
 
 ```{r}
-ttm = get_ttm_link(21601)
+ttm = get_ttm_link(9630)
 
-ttm |>
-    filter(travel_time_p50.link >= 60 & travel_time_p50.base < 60) |>
-    select(from_id, to_id, travel_time_p50.link, travel_time_p50.base, H1_001N, C000)
+ttm |> filter(travel_time_p50.link >= 60 & travel_time_p50.base < 60) |>
+    st_drop_geometry() |>
+    select(ends_with("id"), starts_with("travel"))
 ```
 
 ```{r}
-map_affected_trips(21601, ttm)
+map_affected_trips(9630, ttm)
 ```
 
-Gotta be rounding.
+## Link 10896
 
-## Link 22988
+This changes how this stop is getting linked - it is now linked to a sidewalk fragment.
 
 ```{r}
 ps[[4]]
 ```
 
 ```{r}
-ttm = get_ttm_link(22988)
+ttm = get_ttm_link(10896)
 
-ttm |>
-    filter(travel_time_p50.link >= 60 & travel_time_p50.base < 60) |>
-    select(from_id, to_id, travel_time_p50.link, travel_time_p50.base, H1_001N, C000)
+ttm |> filter(travel_time_p50.link >= 60 & travel_time_p50.base < 60) |>
+    st_drop_geometry() |>
+    select(ends_with("id"), starts_with("travel"))
 ```
 
 ```{r}
-map_affected_trips(22988, ttm)
+map_affected_trips(10896, ttm)
 ```
 
-```{r}
-get_iso_link(22988, "371830545024010")
-```
+## Link 21914
 
-This one is an evil snapping change. Previously it snapped to parking aisle and sidewalk fragment that has a bus stop connected to it, but now there is a closer link that connects two fragments that don't have bus stops, so access drops drastically.
-
-## Link 34752
+Looks like rounding.
 
 ```{r}
 ps[[5]]
 ```
 
 ```{r}
-ttm = get_ttm_link(34752)
+ttm = get_ttm_link(21914)
 
-ttm |>
-    filter(travel_time_p50.link >= 60 & travel_time_p50.base < 60) |>
-    select(from_id, to_id, travel_time_p50.link, travel_time_p50.base, H1_001N, C000)
+ttm |> filter(travel_time_p50.link >= 60 & travel_time_p50.base < 60) |>
+    st_drop_geometry() |>
+    select(ends_with("id"), starts_with("travel"))
 ```
 
 ```{r}
-map_affected_trips(34752, ttm)
+map_affected_trips(21914, ttm)
 ```
 
-```{r}
-get_iso_link(34752, "371830517003010")
-```
+## Link 40463
 
-Gotta be rounding.
-
-## Link 45375
+Looks like slight linking differences.
 
 ```{r}
 ps[[6]]
 ```
 
 ```{r}
-ttm = get_ttm_link(45375)
+ttm = get_ttm_link(40463)
 
-ttm |>
-    filter(travel_time_p50.link >= 60 & travel_time_p50.base < 60) |>
-    select(from_id, to_id, travel_time_p50.link, travel_time_p50.base, H1_001N, C000)
+ttm |> filter(travel_time_p50.link >= 60 & travel_time_p50.base < 60) |>
+    st_drop_geometry() |>
+    select(ends_with("id"), starts_with("travel"))
 ```
 
 ```{r}
-map_affected_trips(45375, ttm)
+map_affected_trips(40463, ttm)
 ```
 
-Previously snapped to the driveway right by the bus stop, now requires a detour to the other link.
+## Link 40676
 
-## Link 45495
+Probably rounding.
 
 ```{r}
 ps[[7]]
 ```
 
 ```{r}
-ttm = get_ttm_link(45495)
+ttm = get_ttm_link(40676)
 
-ttm |>
-    filter(travel_time_p50.link >= 60 & travel_time_p50.base < 60) |>
-    select(from_id, to_id, travel_time_p50.link, travel_time_p50.base, H1_001N, C000)
+ttm |> filter(travel_time_p50.link >= 60 & travel_time_p50.base < 60) |>
+    st_drop_geometry() |>
+    select(ends_with("id"), starts_with("travel"))
 ```
 
 ```{r}
-map_affected_trips(45495, ttm)
+map_affected_trips(40676, ttm)
 ```
 
-Gotta be rounding.
+## Link 41591
 
-## Link 67181
+Gotta be rounding.
 
 ```{r}
 ps[[8]]
 ```
 
-This is a linking issue exacerbated by a data issue, the link connects to the street but the point previously linked to a separate sidewalk network.
-
 ```{r}
-ttm = get_ttm_link(67181)
+ttm = get_ttm_link(41591)
 
-ttm |>
-    filter(travel_time_p50.link >= 60 & travel_time_p50.base < 60) |>
-    select(from_id, to_id, travel_time_p50.link, travel_time_p50.base, H1_001N, C000)
+ttm |> filter(travel_time_p50.link >= 60 & travel_time_p50.base < 60) |>
+    st_drop_geometry() |>
+    select(ends_with("id"), starts_with("travel"))
 ```
 
 ```{r}
-map_affected_trips(67181, ttm)
+map_affected_trips(41591, ttm)
+```
+
+## Link 41745
+
+Slight linking differences.
+
+```{r}
+ps[[9]]
+```
+
+```{r}
+ttm = get_ttm_link(41745)
+
+ttm |> filter(travel_time_p50.link >= 60 & travel_time_p50.base < 60) |>
+    st_drop_geometry() |>
+    select(ends_with("id"), starts_with("travel"))
+```
+
+```{r}
+map_affected_trips(41745, ttm)
+```
+
+## Link 43000
+
+```{r}
+ps[[10]]
+```
+
+```{r}
+ttm = get_ttm_link(43000)
+
+ttm |> filter(travel_time_p50.link >= 60 & travel_time_p50.base < 60) |>
+    st_drop_geometry() |>
+    select(ends_with("id"), starts_with("travel"))
+```
+
+```{r}
+map_affected_trips(43000, ttm)
+```
+
+## Link 44988
+
+I think this is a linking change for the bus stop.
+
+```{r}
+ps[[11]]
+```
+
+```{r}
+ttm = get_ttm_link(44988)
+
+ttm |> filter(travel_time_p50.link >= 60 & travel_time_p50.base < 60) |>
+    st_drop_geometry() |>
+    select(ends_with("id"), starts_with("travel"))
+```
+
+```{r}
+map_affected_trips(44988, ttm)
+```
+
+## Link 49528
+
+Small linking change.
+
+```{r}
+ps[[12]]
+```
+
+```{r}
+ttm = get_ttm_link(49528)
+
+ttm |> filter(travel_time_p50.link >= 60 & travel_time_p50.base < 60) |>
+    st_drop_geometry() |>
+    select(ends_with("id"), starts_with("travel"))
+```
+
+```{r}
+map_affected_trips(49528, ttm)
+```
+
+## Link 55593
+
+So this is a big change, there's a bus linking change here that increases the walking distance between the 23L and the 8 and causes you to miss the transfer.
+
+```{r}
+ps[[13]]
+```
+
+```{r}
+ttm = get_ttm_link(55593)
+
+ttm |> filter(travel_time_p50.link >= 60 & travel_time_p50.base < 60) |>
+    st_drop_geometry() |>
+    select(ends_with("id"), starts_with("travel"))
+```
+
+```{r}
+map_affected_trips(55593, ttm)
+```
+
+```{r}
+get_iso_link(55593, "371830537151010")
+```
+
+```{r}
+ggplot() +
+    annotation_map_tile() +
+    layer_spatial(
+        blocks |>
+            inner_join(
+        ttm |>
+        filter(travel_time_p50.link >= 60 & travel_time_p50.base < 60),
+        by = c("id" = "from_id"))
+    )
+```
+
+```{r}
+gora = read_gtfs(file.path(DATA_PATH, "data", "gtfs", "goraleigh.zip")) |>
+    filter_by_service_id(c("1", "5"))
+
+# transfer from 23L
+with(gora,
+    trips |>
+    filter(route_id == "23L" & direction_id == 0) |>
+    inner_join(stop_times, join_by(trip_id)) |>
+    filter(stop_id == "2790") |> # E Millbrook at Six Forks
+    pull(departure_time) |>
+    sort()
+)
+```
+
+```{r}
+# Transfer to 8
+with(gora,
+    trips |>
+    filter(route_id == "8" & direction_id == 0) |>
+    inner_join(stop_times, join_by(trip_id)) |>
+    filter(stop_id == "3009") |> # Six Forks at Millbrook
+    pull(departure_time) |>
+    sort()
+)
+```
+
+## Link 57672
+
+Definitely linking changes
+
+```{r}
+ps[[14]]
+```
+
+```{r}
+ttm = get_ttm_link(57672)
+
+ttm |> filter(travel_time_p50.link >= 60 & travel_time_p50.base < 60) |>
+    st_drop_geometry() |>
+    select(ends_with("id"), starts_with("travel"))
+```
+
+```{r}
+map_affected_trips(57672, ttm)
 ```

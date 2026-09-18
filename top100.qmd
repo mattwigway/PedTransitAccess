@@ -9,29 +9,30 @@ library(ggspatial)
 
 DATA_PATH = Sys.getenv("DATA_PATH")
 blocks = read_sf(file.path(DATA_PATH, "data", "hu.gpkg"))
+links = read_sf(file.path(DATA_PATH, "data", "links.gpkg"))
 
 ```
 
 ```{r}
-all_top100_files = Sys.glob(file.path(DATA_PATH, "networks", "links_top100", "*", "disaggregate.csv"))
-stopifnot(length(all_top100_files) == 100)
+all_top250_files = Sys.glob(file.path(DATA_PATH, "networks", "links_top250", "*", "disaggregate.csv"))
+stopifnot(length(all_top250_files) == 250)
 ```
 
 ```{r}
-top100 = map(all_top100_files, \(x) (read_csv(x, col_types = cols(id = col_character()), show_col_types = F) |> mutate(link = as.numeric(str_extract(x, "link_id_([0-9]+)", group = 1))))) |>
+top250 = map(all_top250_files, \(x) (read_csv(x, col_types = cols(id = col_character()), show_col_types = F) |> mutate(link = as.numeric(str_extract(x, "link_id_([0-9]+)", group = 1))))) |>
     list_rbind()
 
-base = read_csv(file.path(DATA_PATH, "networks", "baseline", "disaggregate.csv"))
+base = read_csv(file.path(DATA_PATH, "networks", "baseline", "disaggregate.csv"), col_types = cols(id = col_character()))
 ```
 
 ```{r}
-top100 = top100 |>
+top250 = top250 |>
     left_join(base, join_by(id), relationship = "many-to-one", suffix = c("_link", "_base")) |>
     mutate(accessibility_delta = accessibility_link - accessibility_base, accessibility_pctchg = accessibility_link / accessibility_base)
 ```
 
 ```{r}
-max_access_increase = top100 |>
+max_access_increase = top250 |>
     group_by(link) |>
     summarize(max_abs = max(accessibility_delta))
 
@@ -49,7 +50,7 @@ max_access_increase |>
             scales::comma(round(quantile(max_access_increase$max_abs, 0.75)))
         ), hjust=1.1, vjust=1.2)
 
-ggsave(here::here("paper/figures/top100.png"), width = 6, height = 4, dpi = 600, bg = "white")
+ggsave(here::here("paper/figures/top250.png"), width = 6, height = 4, dpi = 600, bg = "white")
 ```
 
 Sensitivity test medians
@@ -71,17 +72,16 @@ max_access_increase |>
 ## What about aggregate
 
 ```{r}
-agg = top100 |>
+agg = top250 |>
     left_join(blocks, join_by(id == GEOID)) |>
     group_by(link) |>
     summarize(
-        agg = sum(accessibility * H1_001N),
+        agg = sum(accessibility_link * H1_001N),
         delta = agg - with(base, sum(accessibility * H1_001N))
     )
 
-agg |>
-    left_join(links, join_by(link == id)) |>
-    summarize(cor(rank, agg, method = "spearman"))
+agg = agg |>
+    left_join(links, join_by(link == id))
 ```
 
 ```{r}
@@ -99,47 +99,37 @@ agg |>
             scales::comma(round(quantile(agg$delta, 0.75)))
         ), hjust=1.1, vjust=1.2)
 
-ggsave(here::here("paper/figures/top100_agg.png"), width = 6, height = 4, dpi = 600, bg = "white")
+ggsave(here::here("paper/figures/top250_agg.png"), width = 6, height = 4, dpi = 600, bg = "white")
+```
+
+```{r}
+agg |>
+  mutate(
+    rankcat = cut(rank, c(0, 25, 50, 75, 100, 125, 150, 175, 200, 225, 250))
+  ) |>
+  group_by(rankcat) |>
+  mutate(
+    rankcat = fct_relabel(rankcat, \(rankcat) {
+      sprintf(
+        "%d-%s",
+        as.numeric(str_extract(rankcat, "^\\(([0-9]+)", 1)) + 1,
+        str_extract(rankcat, "([0-9]+)\\]$", 1)
+      )
+    })
+  ) |>
+  ggplot(aes(x = rankcat, y = delta)) +
+  geom_boxplot() +
+  xlab("Access to transit rank") +
+  ylab("Median change in access score\n(housing units × jobs accessible)") +
+  scale_y_continuous(labels = scales::comma)
+
+ggsave(here::here("paper/figures/top250_box.png"), width = 6, height = 4, dpi = 600, bg = "white")
 ```
 
 ## Evaluate reduced access
-
 ```{r}
-blocks = read_sf(file.path(DATA_PATH, "data", "hu.gpkg"))
-jobs = read_csv(file.path(DATA_PATH, "data", "nc_wac_S000_JT00_2023.csv.gz"), col_types=cols(w_geocode=col_character()))
+agg |>
+    filter(delta < 0)
 ```
 
-```{r}
-blocks = blocks |>
-    # Confirmed same vintage
-    left_join(jobs, by=c("GEOID"="w_geocode")) |>
-    mutate(C000=replace_na(C000, 0)) |>
-    rename(id="GEOID")
-```
-
-```{r}
-points = st_centroid(blocks) |> st_transform(4326)
-```
-
-
-```{r}
-negative_acc = top100 |>
-    filter(accessibility_delta < 0) |>
-    select(id, link, accessibility_link, accessibility_base)
-```
-
-```{r}
-links = read_sf(file.path(Sys.getenv("DATA_PATH"), "data", "links.gpkg"))
-```
-
-```{r}
-negative_acc_sf = links |>
-    inner_join(negative_acc, join_by(id == link)) |>
-    st_set_crs(32119)
-    ggplot() +
-        annotation_map_tile(alpha = 0.5) +
-        layer_spatial(negative_acc_sf) +
-        layer_spatial(points |> inner_join(mutate(negative_acc, id = as.character(id)), join_by(id)))
-```
-
-Effect is tiny, gotta be rounding.
+If you look at top250 there are a few, but that's not surprising.

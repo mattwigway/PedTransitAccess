@@ -20,10 +20,7 @@ DATA_PATH = config["DATA_PATH"]
 ```
 
 ```{julia}
-# bbox: -79.2793,36.1195,-78.3099,35.5639
-G = MissingLinks.graph_from_osm(
-    joinpath(DATA_PATH, "data", "triangle.osm.pbf"),
-    # In MissingLinks 0.2.3, this has highway=road included, which is arguably a mistake
+traversal_settings = # In MissingLinks 0.2.3, this has highway=road included, which is arguably a mistake
     # this will be fixed in 0.2.4, but it's not actually a problem for this analysis
     # as there are no such ways in the input data.
     MissingLinks.RuleBasedTraversalPermissionSettings([
@@ -47,7 +44,12 @@ G = MissingLinks.graph_from_osm(
                 "sidewalk:right" => "yes",
                 "sidewalk:both" => "yes"
             ], true)
-    ], false),
+    ], false)
+
+# bbox: -79.2793,36.1195,-78.3099,35.5639
+G = MissingLinks.graph_from_osm(
+    joinpath(DATA_PATH, "data", "triangle.osm.pbf"),
+    traversal_settings,
     GFT.EPSG(32119) # State Plane NC, meters
 )
 ```
@@ -204,7 +206,7 @@ end
 links, scores = MissingLinks.merge_links(G, Gs, candidate_links, score_matrix)
 links_gravity, scores_gravity = MissingLinks.merge_links(G, Gs, candidate_links, score_matrix_gravity)
 
-# 34 mins on PC
+# 37 mins on PC
 @info "Runtime: $(round((Dates.now() - algorithm_start), Minute))"
 
 @assert all(links .== links_gravity)
@@ -233,54 +235,56 @@ GeoDataFrames.write(
 )
 ```
 
-## Insert top 100 links into network
+## Insert top 175 links into network (empirically determined)
 
 ```{julia}
 create_pbfs(
     joinpath(DATA_PATH, "data", "triangle.osm.pbf"),
     joinpath(DATA_PATH, "networks", "baseline", "triangle-base.osm.pbf"),
     joinpath(DATA_PATH, "networks", "scenario", "triangle-scenario.osm.pbf"),
-    links[ranks .≤ 100],
-    G
+    links[ranks .≤ 175],
+    G,
+    traversal_settings
+
 )
 ```
 
 ## Create individual PBFs for a random sample of links
 
 ```{julia}
-# base = read_and_filter(
-#     joinpath(DATA_PATH, "networks", "baseline", "triangle-base.osm.pbf"),
-#     # already filtered
-#     MissingLinks.RuleBasedTraversalPermissionSettings([], true)
-# )
+base = read_and_filter(
+    joinpath(DATA_PATH, "networks", "baseline", "triangle-base.osm.pbf"),
+    # already filtered
+    MissingLinks.RuleBasedTraversalPermissionSettings([], true)
+)
 
-# sidx = build_way_idx(base.ways, base.nodes)
-# total = sum(scores .> 0)
+sidx = build_way_idx(base.ways, base.nodes)
+total = sum(scores .> 0)
 
-# sample_size = 1000
-# rng = Xoshiro(27599)
-# link_indices = sample(collect(eachindex(links))[scores .> 0], sample_size, replace=false)
+sample_size = 1000
+rng = Xoshiro(27599)
+link_indices = sample(collect(eachindex(links))[scores .> 0], sample_size, replace=false)
 
-# # NB LibSpatialIndex is used here and is not threadsafe, do not parallelize this loop
-# for (idx, linkid, link, rank) in zip(1:total, ids[link_indices], links[link_indices], ranks[link_indices])
-#     # shallow copies, for use with copy-on-write operations
-#     ways = copy(base.ways)
-#     nodes = copy(base.nodes)
-#     insert_links!(G, ways, nodes, [link], idx = sidx)
-#     dir = joinpath(DATA_PATH, "networks", "links", "link_id_$linkid")
-#     if !isdir(dir)
-#         mkpath(dir)
-#     end
+# NB LibSpatialIndex is used here and is not threadsafe, do not parallelize this loop
+for (idx, linkid, link, rank) in zip(1:total, ids[link_indices], links[link_indices], ranks[link_indices])
+    # shallow copies, for use with copy-on-write operations
+    ways = copy(base.ways)
+    nodes = copy(base.nodes)
+    insert_links!(G, ways, nodes, [link], idx = sidx)
+    dir = joinpath(DATA_PATH, "networks", "links", "link_id_$linkid")
+    if !isdir(dir)
+        mkpath(dir)
+    end
 
-#     write_pbf(joinpath(dir, "link_id_$(linkid).osm.pbf"), values(nodes), ways, [])
+    write_pbf(joinpath(dir, "link_id_$(linkid).osm.pbf"), values(nodes), ways, [])
 
-#     if idx % 10 == 0
-#         @info "Wrote $idx / $sample_size OSM files"
-#     end
-# end
+    if idx % 10 == 0
+        @info "Wrote $idx / $sample_size OSM files"
+    end
+end
 ```
 
-## Create individual PBFs for the top 200 links
+## Create individual PBFs for the top 250 links
 
 ```{julia}
 link_indices = eachindex(links)[ranks .≤ 250]
@@ -317,7 +321,8 @@ create_pbfs(
     nothing,
     joinpath(DATA_PATH, "networks", "ccc", "triangle-ccc.osm.pbf"),
     ccc,
-    G
+    G,
+    traversal_settings
 )
 ```
 
