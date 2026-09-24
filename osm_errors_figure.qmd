@@ -1,0 +1,180 @@
+Link 55593 leads to a major drop in access. Make a figure demonstrating why.
+
+```{r}
+library(tidyverse)
+library(sf)
+library(ggspatial)
+library(ggunc)
+library(gtfstools)
+library(tmap)
+options(java.parameters="-Xmx8G", r5r.r5jar="../r5/build/libs/r5-v4.1.0-124-g996dd94-all.jar")
+devtools::load_all("../r5r/r-package")
+
+DATA_PATH = Sys.getenv("DATA_PATH")
+```
+
+```{r}
+base = build_network(file.path(DATA_PATH, "networks", "baseline"))
+link_net = build_network(file.path(DATA_PATH, "networks", "links", "link_id_55593"))
+```
+
+```{r}
+gora = read_gtfs(file.path(DATA_PATH, "data", "gtfs", "goraleigh.zip"))
+```
+
+```{r}
+origin = tibble(id = 1, lat = 35.85641467792999, lon = -78.67101099803345)
+
+base_iso = isochrone(
+    r5r_network = base,
+    origins = origin,
+    mode = "TRANSIT",
+    time_window=120L,
+    cutoffs=c(60),
+    departure_datetime=as.POSIXct("2025-07-17 07:00:00"),
+    zoom=11
+)
+
+link_iso = isochrone(
+    r5r_network = link_net,
+    origins = origin,
+    mode = "TRANSIT",
+    time_window=120L,
+    cutoffs=c(60),
+    departure_datetime=as.POSIXct("2025-07-17 07:00:00"),
+    zoom=11
+)
+
+isos = rbind(
+    mutate(base_iso, scenario = "Baseline"),
+    mutate(link_iso, scenario = "With link")
+)
+```
+
+```{r}
+iso_map = tm_basemap(server=paste0("https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/512/{z}/{x}/{y}@2x?fmt=&access_token=", Sys.getenv("MAPBOX_API_KEY"))) +
+    tm_shape(isos, relative=T, width=2, height=1) +
+    tm_polygons(
+        fill="scenario",
+        fill_alpha=0.5,
+        fill.scale = tm_scale(values=rev(ggunc:::unc_pal()(2))),
+        fill.legend=tm_legend(show=T, title="Scenario", position=tm_pos_in("right", "top"), bg.color="gray")
+        ) +
+        tm_scalebar() +
+    tm_shape(mutate(origin, label="Origin") |> st_as_sf(coords = c("lon", "lat"), crs = 4326)) +
+        tm_dots(fill="label", size=1, fill.scale=tm_scale(values=c("red")), fill.legend=tm_legend(show=T, title="", position=tm_pos_in("right", "top"))) +
+    tm_logo(here::here("paper/figures/mapbox-logo-black.png"), height=1.5, position=tm_pos_in("LEFT", "BOTTOM"), margin=0.5) +
+        tm_credits("Map data © OpenStreetMap contributors, Mapbox")
+
+iso_map
+```
+
+## network maps
+
+```{r}
+base_net = street_network_to_sf(base)
+```
+
+```{r}
+link = read_sf(file.path(DATA_PATH, "data", "links.gpkg")) |>
+    filter(id == 55593) |>
+    st_set_crs(32119)
+```
+
+```{r}
+stops = gora$stops |>
+    filter(stop_id %in% c("2790", "3009")) |>
+    st_as_sf(coords = c("stop_lon", "stop_lat"), crs=4326)
+```
+
+Get transfer paths
+
+```{r}
+# 1.9 minutes
+base_path = detailed_itineraries(
+    r5r_network = base,
+    origins = stops[1,] |> rename(id = stop_id),
+    destinations = stops[2,] |> rename(id = stop_id),
+    mode = "walk"
+)
+
+# 4.3 minutes
+link_path = detailed_itineraries(
+    r5r_network = link_net,
+    origins = stops[1,] |> rename(id = stop_id),
+    destinations = stops[2,] |> rename(id = stop_id),
+    mode = "walk"
+)
+```
+
+```{r}
+bbox = st_bbox(c(ymin =35.85521801202155, xmin = -78.64220834614451, ymax = 35.85665495714543, xmax = -78.64002714013611))
+
+link_map = tm_basemap(server="Esri.WorldImagery", alpha=0.5) +
+    tm_shape(base_net$edges, bbox = bbox) +
+    tm_lines(lwd=2, col="black", col.legend=tm_legend(show=T, title="Baseline network", position=tm_pos_out("right", "center"))) +
+    tm_shape(link) +
+    tm_lines(lwd=6, col="#ff3333", col.legend=tm_legend(show=T, title="Link", position=tm_pos_out("right", "center"))) +
+    tm_shape(stops) +
+    tm_dots(fill="#2266cc") +
+    tm_shape(link_path) +
+    tm_lines(lwd = 2, col="blue") +
+    tm_credits("Data © OpenStreetMap contributors, Esri, Mapbox, NC CGIA, Microsoft, Vantor")
+```
+
+```{r}
+tmap_save(link_map, here::here("paper/figures/link_issue.png"), width=6, height=4, bg="white")
+```
+
+## And check the GTFS stop_times
+
+```{r}
+gora = gora |>
+    filter_by_service_id("3") |>
+    convert_time_to_seconds()
+    
+arrivals = gora$stop_times |>
+    filter(stop_id == "2790")
+
+departures = gora$stop_times |>
+    filter(stop_id == "3009")
+
+departures |>
+    select(departure_time_secs, departure_time) |>
+    inner_join(select(arrivals, arrival_time_secs, arrival_time), join_by(closest(departure_time_secs >= arrival_time_secs))) |>
+    mutate(difference_mins = (departure_time_secs - arrival_time_secs) / 60) |>
+    select(arrival_time, departure_time, difference_mins)
+
+```
+
+## Network connectivity issue map
+
+```{r}
+godu = read_gtfs(file.path(DATA_PATH, "data", "gtfs", "godurham.zip"))
+conn_link = read_sf(file.path(DATA_PATH, "data", "links.gpkg")) |>
+    #filter(id %in% c(10896, 47920)) |>
+    st_set_crs(32119)
+```
+
+```{r}
+bbox_net = st_bbox(c(ymin =  36.026764, xmin = -78.890017, ymax = 36.027304, xmax = -78.889115))
+
+conn_map = tm_basemap(server="Esri.WorldImagery", alpha=0.5) +
+    tm_shape(base_net$edges, bbox = bbox_net) +
+    tm_lines(lwd=2, col="black", col.legend=tm_legend(show=T, title="Baseline network", position=tm_pos_out("right", "center"))) +
+    tm_shape(st_as_sf(godu$stops, coords = c("stop_lon", "stop_lat"), crs = 4326)) +
+    tm_dots(fill="#2266cc", fill.legend=tm_legend(show=T, title="Bus stops", position=tm_pos_out("right", "center"))) +
+    tm_shape(conn_link) +
+    tm_lines(lty="dashed", col="black", col.legend=tm_legend(show=T, title="Potential link", position=tm_pos_out("right", "center"))) +
+    # circle in red
+    tm_shape(tibble(lat = 36.027065, lon = -78.889687) |> st_as_sf(coords = c("lon", "lat"), crs=4326) |> st_buffer(4)) +
+    tm_borders(col = "red") +
+    tm_layout(legend.outside = TRUE) +
+    tm_credits("Data © OpenStreetMap contributors, Esri, Mapbox, NC CGIA, Microsoft, Vantor")
+
+conn_map
+```
+
+```{r}
+tmap_save(conn_map, here::here("paper/figures/connectivity_issue.png"), width=6, height=4, bg="white")
+```
